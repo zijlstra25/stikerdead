@@ -56,7 +56,8 @@ public class StickerKeyboardService extends InputMethodService {
     );
 
     private final Handler handler = new Handler(Looper.getMainLooper());
-    private final ExecutorService stickerExecutor = Executors.newSingleThreadExecutor();
+    private final ExecutorService thumbnailExecutor = Executors.newFixedThreadPool(2);
+    private final ExecutorService sendExecutor = Executors.newSingleThreadExecutor();
     private EditorInfo currentEditorInfo;
     private boolean stickerMode = true;
     private boolean shiftEnabled = false;
@@ -88,7 +89,8 @@ public class StickerKeyboardService extends InputMethodService {
 
     @Override
     public void onDestroy() {
-        stickerExecutor.shutdownNow();
+        thumbnailExecutor.shutdownNow();
+        sendExecutor.shutdownNow();
         super.onDestroy();
     }
 
@@ -232,7 +234,7 @@ public class StickerKeyboardService extends InputMethodService {
         // No decodificamos la imagen completa en el hilo del teclado.
         // Con muchos stickers esto bloqueaba el IME y hacía que cambiar de
         // categoría se sintiera lento.
-        stickerExecutor.execute(() -> {
+        thumbnailExecutor.execute(() -> {
             Bitmap bitmap = decodeStickerThumbnail(sticker.path, 240);
             if (bitmap != null) {
                 handler.post(() -> {
@@ -283,7 +285,7 @@ public class StickerKeyboardService extends InputMethodService {
         if (ic == null || currentEditorInfo == null) return;
 
         final EditorInfo editorInfo = currentEditorInfo;
-        stickerExecutor.execute(() -> {
+        sendExecutor.execute(() -> {
             try {
                 File source = new File(sticker.path);
                 File dir = new File(getCacheDir(), "stickers");
