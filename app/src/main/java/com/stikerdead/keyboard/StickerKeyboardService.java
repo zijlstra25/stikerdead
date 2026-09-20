@@ -43,6 +43,8 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class StickerKeyboardService extends InputMethodService {
 
@@ -54,6 +56,7 @@ public class StickerKeyboardService extends InputMethodService {
     );
 
     private final Handler handler = new Handler(Looper.getMainLooper());
+    private final ExecutorService stickerExecutor = Executors.newSingleThreadExecutor();
     private EditorInfo currentEditorInfo;
     private boolean stickerMode = true;
     private boolean shiftEnabled = false;
@@ -81,6 +84,12 @@ public class StickerKeyboardService extends InputMethodService {
         capsLock = false;
         symbolsMode = false;
         stickerMode = true;
+    }
+
+    @Override
+    public void onDestroy() {
+        stickerExecutor.shutdownNow();
+        super.onDestroy();
     }
 
     @Override
@@ -217,8 +226,21 @@ public class StickerKeyboardService extends InputMethodService {
         FrameLayout cell = new FrameLayout(this);
         ImageView image = new ImageView(this);
         image.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
-        image.setImageDrawable(Drawable.createFromPath(sticker.path));
+        image.setImageResource(android.R.drawable.ic_menu_gallery);
         cell.addView(image, new FrameLayout.LayoutParams(-1, -1));
+
+        // No decodificamos la imagen completa en el hilo del teclado.
+        // Con muchos stickers esto bloqueaba el IME y hacía que cambiar de
+        // categoría se sintiera lento.
+        stickerExecutor.execute(() -> {
+            Bitmap bitmap = decodeStickerThumbnail(sticker.path, 240);
+            if (bitmap != null) {
+                handler.post(() -> {
+                    if (image.getParent() != null) image.setImageBitmap(bitmap);
+                    else bitmap.recycle();
+                });
+            }
+        });
 
         final boolean[] longPress = {false};
         final Runnable[] action = {null};
@@ -259,21 +281,25 @@ public class StickerKeyboardService extends InputMethodService {
     private void sendImportedSticker(ImportedSticker sticker, boolean direct) {
         InputConnection ic = getCurrentInputConnection();
         if (ic == null || currentEditorInfo == null) return;
-        try {
-            File source = new File(sticker.path);
-            File dir = new File(getCacheDir(), "stickers");
-            if (!dir.exists() && !dir.mkdirs()) throw new IOException("No se pudo crear el directorio");
 
-            Bitmap sourceBitmap = BitmapFactory.decodeFile(source.getAbsolutePath());
-            if (sourceBitmap == null) throw new IOException("No se pudo leer el sticker");
+        final EditorInfo editorInfo = currentEditorInfo;
+        stickerExecutor.execute(() -> {
+            try {
+                File source = new File(sticker.path);
+                File dir = new File(getCacheDir(), "stickers");
+                if (!dir.exists() && !dir.mkdirs()) {
+                    throw new IOException("No se pudo crear el directorio");
+                }
 
-            File output = new File(dir, sticker.id + (direct ? ".webp" : ".png"));
+                Bitmap sourceBitmap = BitmapFactory.decodeFile(source.getAbsolutePath());
+                if (sourceBitmap == null) {
+                    throw new IOException("No se pudo leer el sticker");
+                }
 
-            if (direct) {
-                // WhatsApp espera un sticker estático de 512x512 en WebP.
-                // La imagen importada se ajusta dentro de un lienzo transparente
-                // para conservar la proporción y evitar que se rechace por tamaño.
-                Bitmap stickerBitmap = Bitmap.createBitmap(512, 512, Bitmap.Config.ARGB_8888);
+                File output = new File(dir, sticker.id + (direct ? ".webp" : ".png"));
+                Bitmap stickerBitmap = Bitmap.createBitmap(
+                        512, 512, Bitmap.Config.ARGB_8888
+                );
                 Canvas canvas = new Canvas(stickerBitmap);
                 canvas.drawColor(Color.TRANSPARENT, android.graphics.PorterDuff.Mode.CLEAR);
 
@@ -288,94 +314,79 @@ public class StickerKeyboardService extends InputMethodService {
 
                 Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
                 canvas.drawBitmap(sourceBitmap, null,
-                        new android.graphics.Rect(left, top, left + width, top + height),
-                        paint);
+                        new android.graphics.Rect(left, top, left + width, top + height), paint);
+                sourceBitmap.recycle();
 
-                // Intentamos mantener el archivo por debajo de 100 KB, que es
-                // el límite habitual de WhatsApp para stickers estáticos.
-                boolean saved = false;
-                for (int quality = 90; quality >= 30; quality -= 10) {
-                    try (FileOutputStream out = new FileOutputStream(output)) {
-                        stickerBitmap.compress(Bitmap.CompressFormat.WEBP_LOSSY, quality, out);
-                    }
-                    if (output.length() <= 100 * 1024L) {
-                        saved = true;
-                        break;
-                    }
-                }
-                if (!saved) {
-                    try (FileOutputStream out = new FileOutputStream(output)) {
-                        stickerBitmap.compress(Bitmap.CompressFormat.WEBP_LOSSY, 20, out);
-                    }
-                }
-                stickerBitmap.recycle();
-            } else {
-                // En pulsación larga mantenemos una imagen PNG para que WhatsApp
-                // muestre su menú de edición/agregado como imagen.
                 try (FileOutputStream out = new FileOutputStream(output)) {
-                    sourceBitmap.compress(Bitmap.CompressFormat.PNG, 100, out);
+                    if (direct) {
+                        stickerBitmap.compress(Bitmap.CompressFormat.WEBP_LOSSY, 88, out);
+                    } else {
+                        stickerBitmap.compress(Bitmap.CompressFormat.PNG, 100, out);
+                    }
+                } finally {
+                    stickerBitmap.recycle();
                 }
+
+                Uri contentUri = FileProvider.getUriForFile(
+                        this,
+                        getPackageName() + ".fileprovider",
+                        output
+                );
+
+                handler.post(() -> {
+                    try {
+                        InputConnection currentConnection = getCurrentInputConnection();
+                        if (currentConnection == null || currentEditorInfo == null) return;
+
+                        ClipDescription description = new ClipDescription(
+                                sticker.id,
+                                new String[]{direct ? "image/webp.wasticker" : "image/png"}
+                        );
+                        InputContentInfoCompat contentInfo = new InputContentInfoCompat(
+                                contentUri, description, null
+                        );
+
+                        boolean accepted = InputConnectionCompat.commitContent(
+                                currentConnection,
+                                editorInfo,
+                                contentInfo,
+                                InputConnectionCompat.INPUT_CONTENT_GRANT_READ_URI_PERMISSION,
+                                new Bundle()
+                        );
+
+                        if (accepted && direct) {
+                            markStickerUsed(sticker.id);
+                        }
+                    } catch (Exception e) {
+                        Toast.makeText(this, "Error enviando sticker: " + e.getMessage(),
+                                Toast.LENGTH_SHORT).show();
+                    }
+                });
+            } catch (Exception e) {
+                handler.post(() -> Toast.makeText(
+                        this,
+                        "Error preparando sticker: " + e.getMessage(),
+                        Toast.LENGTH_SHORT
+                ).show());
             }
-
-            sourceBitmap.recycle();
-
-            Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", output);
-            String mime = direct ? "image/webp.wasticker" : "image/png";
-            InputContentInfoCompat info = new InputContentInfoCompat(uri,
-                    new ClipDescription("sticker", new String[]{mime}), null);
-            boolean accepted = InputConnectionCompat.commitContent(
-                    ic, currentEditorInfo, info,
-                    InputConnectionCompat.INPUT_CONTENT_GRANT_READ_URI_PERMISSION,
-                    new Bundle()
-            );
-            if (!accepted) {
-                Toast.makeText(this,
-                        direct ? "WhatsApp no aceptó el sticker" : "La app rechazó la imagen",
-                        Toast.LENGTH_SHORT).show();
-            } else if (direct) {
-                markStickerUsed(sticker.id);
-            }
-        } catch (Exception e) {
-            Toast.makeText(this, "Error preparando sticker: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-        }
+        });
     }
 
-    private void showImportCategoryDialog() {
-        // InputMethodService no es una Activity y no puede mostrar un AlertDialog
-        // directamente. MainActivity actúa como puente y muestra el menú.
-        Intent proxy = new Intent(this, MainActivity.class);
-        proxy.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        proxy.putExtra("sticker_action", "add");
-        proxy.putExtra("sticker_category", "personal");
-        startActivity(proxy);
-    }
+    private Bitmap decodeStickerThumbnail(String path, int maxSize) {
+        BitmapFactory.Options bounds = new BitmapFactory.Options();
+        bounds.inJustDecodeBounds = true;
+        BitmapFactory.decodeFile(path, bounds);
 
-    private void takeStickerPhoto() {
-        try {
-            File dir = new File(getExternalFilesDir(android.os.Environment.DIRECTORY_PICTURES), "stickers");
-            if (!dir.exists() && !dir.mkdirs()) throw new IOException("No se pudo crear la carpeta");
-            File photo = new File(dir, "sticker_photo_" + System.currentTimeMillis() + ".jpg");
-            pendingPhotoUri = FileProvider.getUriForFile(
-                    this,
-                    getPackageName() + ".fileprovider",
-                    photo
-            );
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null;
 
-            Intent intent = new Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE);
-            intent.putExtra(android.provider.MediaStore.EXTRA_OUTPUT, pendingPhotoUri);
-            intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            launchExternalActivity(intent, TAKE_STICKER_PHOTO_REQUEST);
-        } catch (Exception e) {
-            Toast.makeText(this, "No se pudo abrir la cámara: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-        }
-    }
+        int sample = 1;
+        int largest = Math.max(bounds.outWidth, bounds.outHeight);
+        while (largest / sample > maxSize * 2) sample *= 2;
 
-    private void launchExternalActivity(Intent intent, int requestCode) {
-        Intent proxy = new Intent(this, MainActivity.class);
-        proxy.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        proxy.putExtra("sticker_action", requestCode == TAKE_STICKER_PHOTO_REQUEST ? "camera" : "picker");
-        proxy.putExtra("sticker_category", importCategory);
-        startActivity(proxy);
+        BitmapFactory.Options options = new BitmapFactory.Options();
+        options.inSampleSize = sample;
+        options.inPreferredConfig = Bitmap.Config.ARGB_8888;
+        return BitmapFactory.decodeFile(path, options);
     }
 
     private boolean importSticker(Uri uri) {
