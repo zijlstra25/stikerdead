@@ -66,6 +66,7 @@ public class StickerKeyboardService extends InputMethodService {
     private final List<String> recentStickerIds = new ArrayList<>();
     private String selectedStickerCategory = "recent";
     private final List<ImportedSticker> importedStickers = new ArrayList<>();
+    private GridLayout stickerGrid;
     private static final int PICK_STICKERS_REQUEST = 4001;
     private static final int TAKE_STICKER_PHOTO_REQUEST = 4002;
     private static final int RESULT_OK = Activity.RESULT_OK;
@@ -137,6 +138,7 @@ public class StickerKeyboardService extends InputMethodService {
         ));
 
         GridLayout grid = new GridLayout(this);
+        stickerGrid = grid;
         grid.setColumnCount(4);
         grid.setPadding(12, 8, 12, 8);
         root.addView(grid, new LinearLayout.LayoutParams(
@@ -420,7 +422,16 @@ public class StickerKeyboardService extends InputMethodService {
 
     private void showStickerCategory(String category) {
         selectedStickerCategory = category;
-        setInputView(buildStickerView());
+        loadFavorites();
+        loadImportedStickers();
+        loadRecentStickers();
+        // No reconstruimos todo el InputView al cambiar de categoría: hacerlo
+        // mientras el IME está visible puede congelar el teclado por un instante.
+        if (stickerGrid != null) {
+            showStickersInGrid(stickerGrid);
+        } else {
+            setInputView(buildStickerView());
+        }
     }
 
     private void showAllStickers() {
