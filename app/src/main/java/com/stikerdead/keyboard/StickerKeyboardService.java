@@ -195,6 +195,9 @@ public class StickerKeyboardService extends InputMethodService {
     }
 
     private void addStickerButton(GridLayout grid, StickerItem sticker) {
+        FrameLayout cell = new FrameLayout(this);
+        cell.setBackgroundColor(Color.WHITE);
+
         TextView button = new TextView(this);
         button.setText(sticker.label());
         button.setTextSize(42);
@@ -215,36 +218,47 @@ public class StickerKeyboardService extends InputMethodService {
                     longPressAction[0] = runnable;
                     handler.postDelayed(runnable, LONG_PRESS_MS);
                     return true;
-
                 case MotionEvent.ACTION_UP:
-                    if (longPressAction[0] != null) {
-                        handler.removeCallbacks(longPressAction[0]);
-                    }
-                    if (!longPressTriggered[0]) {
-                        sendSticker(sticker, true);
-                    }
+                    if (longPressAction[0] != null) handler.removeCallbacks(longPressAction[0]);
+                    if (!longPressTriggered[0]) sendSticker(sticker, true);
                     v.performClick();
                     return true;
-
                 case MotionEvent.ACTION_CANCEL:
-                    if (longPressAction[0] != null) {
-                        handler.removeCallbacks(longPressAction[0]);
-                    }
+                    if (longPressAction[0] != null) handler.removeCallbacks(longPressAction[0]);
                     return true;
-
                 default:
                     return true;
             }
         });
+
+        cell.addView(button, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+        ));
+
+        TextView favorite = new TextView(this);
+        favorite.setText(favoriteStickerIds.contains(sticker.id()) ? "★" : "☆");
+        favorite.setTextSize(22);
+        favorite.setGravity(Gravity.CENTER);
+        favorite.setTextColor(Color.rgb(70, 70, 70));
+        favorite.setBackgroundColor(Color.WHITE);
+        favorite.setContentDescription("Favorito");
+        favorite.setOnClickListener(v -> {
+            toggleFavorite(sticker.id());
+            favorite.setText(favoriteStickerIds.contains(sticker.id()) ? "★" : "☆");
+        });
+
+        FrameLayout.LayoutParams favoriteParams =
+                new FrameLayout.LayoutParams(38, 38, Gravity.TOP | Gravity.RIGHT);
+        cell.addView(favorite, favoriteParams);
 
         GridLayout.LayoutParams params = new GridLayout.LayoutParams();
         params.width = 0;
         params.height = 120;
         params.columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f);
         params.setMargins(6, 6, 6, 6);
-        grid.addView(button, params);
+        grid.addView(cell, params);
     }
-
     // Teclado de escritura inspirado en el diseño de los teclados Android modernos.
     // El botón de stickers queda arriba a la derecha para volver al panel de stickers.
     private View buildTypingView() {
