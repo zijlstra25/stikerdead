@@ -239,7 +239,7 @@ public class StickerKeyboardService extends InputMethodService {
     private void addKeyRow(LinearLayout parent, String[] letters) {
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.CENTER);
-        row.setPadding(2, 2, 2, 2);
+        row.setPadding(1, 2, 1, 2);
 
         for (String letter : letters) {
             TextView key = makeKeyButton(letter);
@@ -279,7 +279,7 @@ public class StickerKeyboardService extends InputMethodService {
     private TextView makeKeyButton(String text) {
         TextView button = new TextView(this);
         button.setText(text);
-        button.setTextSize(18);
+        button.setTextSize(19);
         button.setGravity(Gravity.CENTER);
         button.setTextColor(Color.rgb(30, 30, 30));
         button.setBackgroundColor(Color.WHITE);
@@ -309,7 +309,7 @@ public class StickerKeyboardService extends InputMethodService {
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
                 0, ViewGroup.LayoutParams.MATCH_PARENT, weight
         );
-        params.setMargins(2, 2, 2, 2);
+        params.setMargins(1, 2, 1, 2);
         return params;
     }
 
