@@ -7,12 +7,15 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
 import android.inputmethodservice.InputMethodService;
+import android.view.inputmethod.EditorInfo;
 import android.widget.GridLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -30,11 +33,14 @@ import java.util.List;
 
 public class StickerKeyboardService extends InputMethodService {
 
+    private static final long LONG_PRESS_MS = 900L;
+
     private static final List<StickerItem> STICKERS = List.of(
-            new StickerItem("heart", "❤️", "heart", "image/png"),
-            new StickerItem("smile", "😄", "smile", "image/png")
+            new StickerItem("heart", "❤️", "heart", "image/webp.wasticker"),
+            new StickerItem("smile", "😄", "smile", "image/webp.wasticker")
     );
 
+    private final Handler handler = new Handler(Looper.getMainLooper());
     private EditorInfo currentEditorInfo;
 
     @Override
@@ -77,7 +83,42 @@ public class StickerKeyboardService extends InputMethodService {
             button.setTextSize(42);
             button.setGravity(Gravity.CENTER);
             button.setBackgroundColor(Color.WHITE);
-            button.setOnClickListener(v -> sendSticker(sticker));
+
+            final boolean[] longPressTriggered = {false};
+            final Runnable[] longPressAction = {null};
+
+            button.setOnTouchListener((v, event) -> {
+                switch (event.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        longPressTriggered[0] = false;
+                        Runnable runnable = () -> {
+                            longPressTriggered[0] = true;
+                            sendSticker(sticker, false);
+                        };
+                        longPressAction[0] = runnable;
+                        handler.postDelayed(runnable, LONG_PRESS_MS);
+                        return true;
+
+                    case MotionEvent.ACTION_UP:
+                        if (longPressAction[0] != null) {
+                            handler.removeCallbacks(longPressAction[0]);
+                        }
+                        if (!longPressTriggered[0]) {
+                            sendSticker(sticker, true);
+                        }
+                        v.performClick();
+                        return true;
+
+                    case MotionEvent.ACTION_CANCEL:
+                        if (longPressAction[0] != null) {
+                            handler.removeCallbacks(longPressAction[0]);
+                        }
+                        return true;
+
+                    default:
+                        return true;
+                }
+            });
 
             GridLayout.LayoutParams params = new GridLayout.LayoutParams();
             params.width = 0;
@@ -90,7 +131,7 @@ public class StickerKeyboardService extends InputMethodService {
         return root;
     }
 
-    private void sendSticker(StickerItem sticker) {
+    private void sendSticker(StickerItem sticker, boolean directStickerMode) {
         InputConnection ic = getCurrentInputConnection();
 
         if (ic == null) {
@@ -103,43 +144,21 @@ public class StickerKeyboardService extends InputMethodService {
             return;
         }
 
-        String[] acceptedMimeTypes = EditorInfoCompat.getContentMimeTypes(currentEditorInfo);
-
-        if (acceptedMimeTypes == null || acceptedMimeTypes.length == 0) {
-            ic.commitText("[sticker:" + sticker.id() + "]", 1);
-            Toast.makeText(
-                    this,
-                    "Esta app no acepta imágenes desde el teclado",
-                    Toast.LENGTH_SHORT
-            ).show();
-            return;
-        }
-
-        boolean acceptsPng = false;
-        for (String type : acceptedMimeTypes) {
-            if (ClipDescription.compareMimeTypes(sticker.mimeType(), type)
-                    || ClipDescription.compareMimeTypes(type, sticker.mimeType())) {
-                acceptsPng = true;
-                break;
-            }
-        }
-
-        if (!acceptsPng) {
-            ic.commitText("[sticker:" + sticker.id() + "]", 1);
-            Toast.makeText(
-                    this,
-                    "La app no declara soporte para PNG",
-                    Toast.LENGTH_SHORT
-            ).show();
-            return;
-        }
-
         try {
-            Uri contentUri = createStickerPng(sticker);
+            final Uri contentUri;
+            final String mimeType;
+
+            if (directStickerMode) {
+                contentUri = createStickerWebp(sticker);
+                mimeType = "image/webp.wasticker";
+            } else {
+                contentUri = createStickerPng(sticker);
+                mimeType = "image/png";
+            }
 
             ClipDescription description = new ClipDescription(
                     sticker.label(),
-                    new String[]{"image/png"}
+                    new String[]{mimeType}
             );
 
             InputContentInfoCompat contentInfo = new InputContentInfoCompat(
@@ -157,18 +176,15 @@ public class StickerKeyboardService extends InputMethodService {
             );
 
             if (!accepted) {
-                ic.commitText("[sticker:" + sticker.id() + "]", 1);
                 Toast.makeText(
                         this,
-                        "La app rechazó el sticker",
+                        directStickerMode
+                                ? "La app no aceptó el sticker directo"
+                                : "La app rechazó la imagen",
                         Toast.LENGTH_SHORT
                 ).show();
-            } else {
-                Toast.makeText(this, "Sticker enviado", Toast.LENGTH_SHORT).show();
             }
-
         } catch (Exception e) {
-            ic.commitText("[sticker:" + sticker.id() + "]", 1);
             Toast.makeText(
                     this,
                     "Error preparando sticker: " + e.getMessage(),
@@ -177,14 +193,53 @@ public class StickerKeyboardService extends InputMethodService {
         }
     }
 
+    private Uri createStickerWebp(StickerItem sticker) throws IOException {
+        File outputFile = createStickerImage(sticker, ".webp");
+
+        try (FileOutputStream out = new FileOutputStream(outputFile)) {
+            Bitmap bitmap = buildStickerBitmap(sticker);
+            try {
+                bitmap.compress(Bitmap.CompressFormat.WEBP_LOSSY, 90, out);
+            } finally {
+                bitmap.recycle();
+            }
+        }
+
+        return FileProvider.getUriForFile(
+                this,
+                getPackageName() + ".fileprovider",
+                outputFile
+        );
+    }
+
     private Uri createStickerPng(StickerItem sticker) throws IOException {
+        File outputFile = createStickerImage(sticker, ".png");
+
+        try (FileOutputStream out = new FileOutputStream(outputFile)) {
+            Bitmap bitmap = buildStickerBitmap(sticker);
+            try {
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, out);
+            } finally {
+                bitmap.recycle();
+            }
+        }
+
+        return FileProvider.getUriForFile(
+                this,
+                getPackageName() + ".fileprovider",
+                outputFile
+        );
+    }
+
+    private File createStickerImage(StickerItem sticker, String extension) throws IOException {
         File dir = new File(getCacheDir(), "stickers");
         if (!dir.exists() && !dir.mkdirs()) {
             throw new IOException("No se pudo crear el directorio de stickers");
         }
+        return new File(dir, sticker.id() + extension);
+    }
 
-        File outputFile = new File(dir, sticker.id() + ".png");
-
+    private Bitmap buildStickerBitmap(StickerItem sticker) {
         Bitmap bitmap = Bitmap.createBitmap(512, 512, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
         canvas.drawColor(Color.TRANSPARENT, android.graphics.PorterDuff.Mode.CLEAR);
@@ -214,16 +269,6 @@ public class StickerKeyboardService extends InputMethodService {
             canvas.drawArc(150, 230, 362, 365, 10, 160, false, paint);
         }
 
-        try (FileOutputStream out = new FileOutputStream(outputFile)) {
-            bitmap.compress(Bitmap.CompressFormat.PNG, 100, out);
-        } finally {
-            bitmap.recycle();
-        }
-
-        return FileProvider.getUriForFile(
-                this,
-                getPackageName() + ".fileprovider",
-                outputFile
-        );
+        return bitmap;
     }
 }
