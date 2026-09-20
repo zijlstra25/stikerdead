@@ -542,7 +542,7 @@ public class WhatsAppStickerAccessibilityService extends AccessibilityService {
 
         String normalized = identity.toLowerCase(Locale.ROOT);
         for (String record : saved.split("\n")) {
-            String[] parts = record.split("\|", -1);
+            String[] parts = record.split("\\|", -1);
             if (parts.length != 4 || !"whatsapp".equals(parts[2])) continue;
 
             String id = parts[0];
