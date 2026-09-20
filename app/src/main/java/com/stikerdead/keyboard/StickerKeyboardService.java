@@ -157,24 +157,20 @@ public class StickerKeyboardService extends InputMethodService {
         LinearLayout root = createRoot();
 
         LinearLayout toolbar = new LinearLayout(this);
-        toolbar.setGravity(Gravity.CENTER_VERTICAL);
+        toolbar.setGravity(Gravity.CENTER_VERTICAL | Gravity.RIGHT);
         toolbar.setPadding(6, 4, 6, 4);
 
+        // Dos botones cuadrados arriba a la derecha: idioma y stickers.
         TextView language = makeToolbarButton("ES");
-        toolbar.addView(language, new LinearLayout.LayoutParams(
-                0, 46, 1f
-        ));
-
-        TextView emoji = makeToolbarButton("😊");
-        toolbar.addView(emoji, toolbarButtonParams());
+        toolbar.addView(language, toolbarSquareParams());
 
         TextView stickers = makeToolbarButton("🖼");
         stickers.setContentDescription("Stickers");
         stickers.setOnClickListener(v -> switchToStickerMode());
-        toolbar.addView(stickers, toolbarButtonParams());
+        toolbar.addView(stickers, toolbarSquareParams());
 
         root.addView(toolbar, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, 50
+                ViewGroup.LayoutParams.MATCH_PARENT, 54
         ));
 
         LinearLayout keys = new LinearLayout(this);
@@ -217,7 +213,7 @@ public class StickerKeyboardService extends InputMethodService {
         bottom.addView(backspace, keyParams(1f));
 
         keys.addView(bottom, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, 58
+                ViewGroup.LayoutParams.MATCH_PARENT, 66
         ));
 
         return root;
@@ -271,8 +267,8 @@ public class StickerKeyboardService extends InputMethodService {
         return button;
     }
 
-    private LinearLayout.LayoutParams toolbarButtonParams() {
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(48, 46);
+    private LinearLayout.LayoutParams toolbarSquareParams() {
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(54, 46);
         params.setMargins(2, 0, 2, 0);
         return params;
     }
