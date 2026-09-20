@@ -49,3 +49,8 @@ app\build\outputs\apk\debug\app-debug.apk
 6. Probar compatibilidad específicamente con Instagram y otras apps.
 
 Repositorio: https://github.com/zijlstra25/stikerdead
+
+
+## Estado actual
+
+La prueba del MVP en un Samsung SM-A042M confirmó que el teclado funciona y que el toque corto puede enviar directamente un sticker a WhatsApp. La pulsación larga abre el flujo de acciones de WhatsApp. El botón `+` todavía no está implementado. Para el contexto completo y el punto exacto de continuación, consultar [HANDOFF.md](HANDOFF.md).
