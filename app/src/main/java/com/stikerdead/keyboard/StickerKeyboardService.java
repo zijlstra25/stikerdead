@@ -1,14 +1,17 @@
 package com.stikerdead.keyboard;
 
 import android.content.ClipDescription;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Paint;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
-import android.view.inputmethod.InputContentInfo;
 import android.inputmethodservice.InputMethodService;
 import android.widget.GridLayout;
 import android.widget.LinearLayout;
@@ -16,20 +19,35 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.core.content.FileProvider;
+import androidx.core.view.inputmethod.EditorInfoCompat;
+import androidx.core.view.inputmethod.InputConnectionCompat;
+import androidx.core.view.inputmethod.InputContentInfoCompat;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.util.List;
 
 public class StickerKeyboardService extends InputMethodService {
 
     private static final List<StickerItem> STICKERS = List.of(
-            new StickerItem("heart", "❤️", "sticker_heart.svg", "image/svg+xml"),
-            new StickerItem("smile", "😄", "sticker_smile.svg", "image/svg+xml")
+            new StickerItem("heart", "❤️", "heart", "image/png"),
+            new StickerItem("smile", "😄", "smile", "image/png")
     );
+
+    private EditorInfo currentEditorInfo;
+
+    @Override
+    public void onStartInput(EditorInfo attribute, boolean restarting) {
+        super.onStartInput(attribute, restarting);
+        currentEditorInfo = attribute;
+    }
+
+    @Override
+    public void onFinishInput() {
+        currentEditorInfo = null;
+        super.onFinishInput();
+    }
 
     @Override
     public View onCreateInputView() {
@@ -74,64 +92,138 @@ public class StickerKeyboardService extends InputMethodService {
 
     private void sendSticker(StickerItem sticker) {
         InputConnection ic = getCurrentInputConnection();
+
         if (ic == null) {
             Toast.makeText(this, "No hay un campo de texto activo", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        try {
-            File dir = new File(getCacheDir(), "stickers");
-            if (!dir.exists() && !dir.mkdirs()) {
-                throw new IOException("No se pudo crear el directorio de stickers");
-            }
+        if (currentEditorInfo == null) {
+            Toast.makeText(this, "No se pudo obtener información del campo", Toast.LENGTH_SHORT).show();
+            return;
+        }
 
-            File outputFile = new File(dir, sticker.id() + ".svg");
+        String[] acceptedMimeTypes = EditorInfoCompat.getContentMimeTypes(currentEditorInfo);
 
-            try (InputStream in = getAssets().open(sticker.assetName());
-                 OutputStream out = new FileOutputStream(outputFile)) {
-                byte[] buffer = new byte[8192];
-                int read;
-                while ((read = in.read(buffer)) != -1) {
-                    out.write(buffer, 0, read);
-                }
-            }
-
-            Uri contentUri = FileProvider.getUriForFile(
+        if (acceptedMimeTypes == null || acceptedMimeTypes.length == 0) {
+            ic.commitText("[sticker:" + sticker.id() + "]", 1);
+            Toast.makeText(
                     this,
-                    "com.stikerdead.keyboard.fileprovider",
-                    outputFile
-            );
+                    "Esta app no acepta imágenes desde el teclado",
+                    Toast.LENGTH_SHORT
+            ).show();
+            return;
+        }
+
+        boolean acceptsPng = false;
+        for (String type : acceptedMimeTypes) {
+            if (ClipDescription.compareMimeTypes(sticker.mimeType(), type)
+                    || ClipDescription.compareMimeTypes(type, sticker.mimeType())) {
+                acceptsPng = true;
+                break;
+            }
+        }
+
+        if (!acceptsPng) {
+            ic.commitText("[sticker:" + sticker.id() + "]", 1);
+            Toast.makeText(
+                    this,
+                    "La app no declara soporte para PNG",
+                    Toast.LENGTH_SHORT
+            ).show();
+            return;
+        }
+
+        try {
+            Uri contentUri = createStickerPng(sticker);
 
             ClipDescription description = new ClipDescription(
                     sticker.label(),
-                    new String[]{sticker.mimeType()}
+                    new String[]{"image/png"}
             );
 
-            InputContentInfo contentInfo = new InputContentInfo(
+            InputContentInfoCompat contentInfo = new InputContentInfoCompat(
                     contentUri,
                     description,
                     null
             );
 
-            boolean accepted = ic.commitContent(
+            boolean accepted = InputConnectionCompat.commitContent(
+                    ic,
+                    currentEditorInfo,
                     contentInfo,
-                    InputConnection.INPUT_CONTENT_GRANT_READ_URI_PERMISSION,
+                    InputConnectionCompat.INPUT_CONTENT_GRANT_READ_URI_PERMISSION,
                     new Bundle()
             );
 
             if (!accepted) {
+                ic.commitText("[sticker:" + sticker.id() + "]", 1);
                 Toast.makeText(
                         this,
-                        "La aplicación no acepta este tipo de sticker",
+                        "La app rechazó el sticker",
                         Toast.LENGTH_SHORT
                 ).show();
+            } else {
+                Toast.makeText(this, "Sticker enviado", Toast.LENGTH_SHORT).show();
             }
+
         } catch (Exception e) {
+            ic.commitText("[sticker:" + sticker.id() + "]", 1);
             Toast.makeText(
                     this,
-                    "Error al enviar sticker: " + e.getMessage(),
+                    "Error preparando sticker: " + e.getMessage(),
                     Toast.LENGTH_SHORT
             ).show();
         }
+    }
+
+    private Uri createStickerPng(StickerItem sticker) throws IOException {
+        File dir = new File(getCacheDir(), "stickers");
+        if (!dir.exists() && !dir.mkdirs()) {
+            throw new IOException("No se pudo crear el directorio de stickers");
+        }
+
+        File outputFile = new File(dir, sticker.id() + ".png");
+
+        Bitmap bitmap = Bitmap.createBitmap(512, 512, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        canvas.drawColor(Color.TRANSPARENT, android.graphics.PorterDuff.Mode.CLEAR);
+
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+        if ("heart".equals(sticker.id())) {
+            paint.setColor(Color.rgb(255, 77, 109));
+            android.graphics.Path heart = new android.graphics.Path();
+            heart.moveTo(256, 455);
+            heart.cubicTo(70, 330, 55, 210, 105, 140);
+            heart.cubicTo(145, 83, 225, 90, 256, 150);
+            heart.cubicTo(287, 90, 367, 83, 407, 140);
+            heart.cubicTo(457, 210, 442, 330, 256, 455);
+            canvas.drawPath(heart, paint);
+        } else {
+            paint.setColor(Color.rgb(255, 212, 59));
+            canvas.drawCircle(256, 256, 200, paint);
+
+            paint.setColor(Color.rgb(34, 34, 34));
+            canvas.drawCircle(180, 210, 24, paint);
+            canvas.drawCircle(332, 210, 24, paint);
+
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(22);
+            paint.setStrokeCap(Paint.Cap.ROUND);
+            canvas.drawArc(150, 230, 362, 365, 10, 160, false, paint);
+        }
+
+        try (FileOutputStream out = new FileOutputStream(outputFile)) {
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, out);
+        } finally {
+            bitmap.recycle();
+        }
+
+        return FileProvider.getUriForFile(
+                this,
+                getPackageName() + ".fileprovider",
+                outputFile
+        );
     }
 }
