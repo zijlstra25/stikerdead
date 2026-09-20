@@ -63,15 +63,36 @@ public class MainActivity extends Activity {
         importCategory = action.getStringExtra("sticker_category");
         if (importCategory == null) importCategory = "personal";
 
-        if ("picker".equals(stickerAction)) {
-            Intent picker = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-            picker.addCategory(Intent.CATEGORY_OPENABLE);
-            picker.setType("image/*");
-            picker.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
-            startActivityForResult(picker, PICK_STICKERS_REQUEST);
+        if ("add".equals(stickerAction)) {
+            showAddStickerDialog();
+        } else if ("picker".equals(stickerAction)) {
+            openStickerPicker();
         } else if ("camera".equals(stickerAction)) {
             takeStickerPhoto();
         }
+    }
+
+    private void showAddStickerDialog() {
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Agregar sticker")
+                .setItems(new String[]{"📷 Sacar foto", "📁 Otras apps / archivos"}, (dialog, which) -> {
+                    if (which == 0) {
+                        takeStickerPhoto();
+                    } else {
+                        openStickerPicker();
+                    }
+                })
+                .setNegativeButton("Cancelar", (dialog, which) -> finish())
+                .setOnCancelListener(dialog -> finish())
+                .show();
+    }
+
+    private void openStickerPicker() {
+        Intent picker = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        picker.addCategory(Intent.CATEGORY_OPENABLE);
+        picker.setType("image/*");
+        picker.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+        startActivityForResult(picker, PICK_STICKERS_REQUEST);
     }
 
     private void takeStickerPhoto() {
