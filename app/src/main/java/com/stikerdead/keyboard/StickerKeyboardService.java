@@ -155,10 +155,14 @@ public class StickerKeyboardService extends InputMethodService {
     private void showStickersInGrid(GridLayout grid) {
         grid.removeAllViews();
         for (StickerItem sticker : STICKERS) {
-            if ("favorites".equals(selectedStickerCategory) && !favoriteStickerIds.contains(sticker.id())) continue;
-            if (!"recent".equals(selectedStickerCategory) && !"favorites".equals(selectedStickerCategory)
-                    && !"whatsapp".equals(selectedStickerCategory) && !"personal".equals(selectedStickerCategory)) continue;
-            addStickerButton(grid, sticker);
+            // Los stickers incluidos de prueba pertenecen a Recientes.
+            // No se muestran dentro de las categorías de apps.
+            if ("recent".equals(selectedStickerCategory)) {
+                addStickerButton(grid, sticker);
+            } else if ("favorites".equals(selectedStickerCategory)
+                    && favoriteStickerIds.contains(sticker.id())) {
+                addStickerButton(grid, sticker);
+            }
         }
         for (ImportedSticker sticker : importedStickers) {
             if ("favorites".equals(selectedStickerCategory)) {
@@ -242,26 +246,13 @@ public class StickerKeyboardService extends InputMethodService {
     }
 
     private void showImportCategoryDialog() {
-        final String[] names = {"📷 Sacar foto", "📁 Otras apps / archivos"};
-        new android.app.AlertDialog.Builder(this)
-                .setTitle("Agregar sticker")
-                .setItems(names, (d, which) -> {
-                    if (which == 0) {
-                        takeStickerPhoto();
-                    } else {
-                        // Los stickers de las categorías propias se agregan automáticamente
-                        // desde sus respectivos selectores. Esta opción es para fuentes
-                        // que todavía no tienen una categoría propia.
-                        importCategory = "personal";
-                        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-                        intent.addCategory(Intent.CATEGORY_OPENABLE);
-                        intent.setType("image/*");
-                        intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
-                        launchExternalActivity(intent, PICK_STICKERS_REQUEST);
-                    }
-                })
-                .setNegativeButton("Cancelar", null)
-                .show();
+        // InputMethodService no es una Activity y no puede mostrar un AlertDialog
+        // directamente. MainActivity actúa como puente y muestra el menú.
+        Intent proxy = new Intent(this, MainActivity.class);
+        proxy.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        proxy.putExtra("sticker_action", "add");
+        proxy.putExtra("sticker_category", "personal");
+        startActivity(proxy);
     }
 
     private void takeStickerPhoto() {
