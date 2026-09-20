@@ -85,15 +85,6 @@ public class StickerKeyboardService extends InputMethodService {
 
         LinearLayout root = createRoot();
 
-        TextView header = new TextView(this);
-        header.setText("  😀  EMOJIS       STICKERS");
-        header.setGravity(Gravity.CENTER_VERTICAL);
-        header.setTextSize(16);
-        header.setPadding(12, 8, 12, 8);
-        root.addView(header, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, 52
-        ));
-
         // Categorías de stickers: desplazamiento horizontal para que entren todas.
         HorizontalScrollView categoryScroll = new HorizontalScrollView(this);
         categoryScroll.setHorizontalScrollBarEnabled(false);
@@ -104,7 +95,7 @@ public class StickerKeyboardService extends InputMethodService {
         categories.setGravity(Gravity.CENTER_VERTICAL);
 
         addCategoryTextButton(categories, "＋", "Agregar sticker", v ->
-                Toast.makeText(this, "Próximamente: importar/crear sticker", Toast.LENGTH_SHORT).show());
+                showImportCategoryDialog());
 
         addCategoryTextButton(categories, "Recientes", "Stickers recientes", v -> showStickerCategory("recent"));
         addCategoryTextButton(categories, "⭐ Favoritos", "Stickers favoritos", v -> showStickerCategory("favorites"));
@@ -275,7 +266,7 @@ public class StickerKeyboardService extends InputMethodService {
 
         TextView favorite = new TextView(this);
         favorite.setText(favoriteStickerIds.contains(sticker.id()) ? "★" : "☆");
-        favorite.setTextSize(22);
+        favorite.setTextSize(20);
         favorite.setGravity(Gravity.CENTER);
         favorite.setTextColor(Color.rgb(70, 70, 70));
         favorite.setBackgroundColor(Color.WHITE);
@@ -286,7 +277,7 @@ public class StickerKeyboardService extends InputMethodService {
         });
 
         FrameLayout.LayoutParams favoriteParams =
-                new FrameLayout.LayoutParams(38, 38, Gravity.TOP | Gravity.RIGHT);
+                new FrameLayout.LayoutParams(44, 44, Gravity.TOP | Gravity.RIGHT);
         cell.addView(favorite, favoriteParams);
 
         GridLayout.LayoutParams params = new GridLayout.LayoutParams();
