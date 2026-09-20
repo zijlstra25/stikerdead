@@ -686,17 +686,28 @@ public class WhatsAppStickerAccessibilityService extends AccessibilityService {
 
         if (right <= left || bottom <= top) return;
 
-        int width = right - left;
-        int height = bottom - top;
+        Bitmap crop = Bitmap.createBitmap(screen, left, top, right - left, bottom - top);
 
-        Bitmap crop = Bitmap.createBitmap(screen, left, top, width, height);
+        /*
+         * WhatsApp pinta el sticker dentro de una celda de la grilla.
+         * La captura de pantalla incluye esa celda (normalmente blanca o
+         * gris clara), no solamente el sticker. No podemos recuperar el
+         * archivo WebP original desde Accessibility, pero sí separar el
+         * fondo conectado al borde y conservar los blancos que estén dentro
+         * del sticker.
+         */
+        Bitmap cleaned = removeConnectedBackground(crop);
+        crop.recycle();
 
+        int width = cleaned.getWidth();
+        int height = cleaned.getHeight();
         int size = Math.max(width, height);
+
         Bitmap square = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(square);
         canvas.drawColor(Color.TRANSPARENT, android.graphics.PorterDuff.Mode.CLEAR);
-        canvas.drawBitmap(crop, (size - width) / 2f, (size - height) / 2f, null);
-        crop.recycle();
+        canvas.drawBitmap(cleaned, (size - width) / 2f, (size - height) / 2f, null);
+        cleaned.recycle();
 
         File dir = new File(getFilesDir(), "stickers");
         if (!dir.exists() && !dir.mkdirs()) {
@@ -730,6 +741,106 @@ public class WhatsAppStickerAccessibilityService extends AccessibilityService {
 
         RecentStickerManager.markUsed(this, id);
         Log.d(TAG, "WhatsApp sticker added to Recientes: " + id);
+    }
+
+    /**
+     * Hace transparente solamente el fondo que está conectado con el borde
+     * de la captura. Así un sticker que tenga partes blancas no pierde esas
+     * partes internas.
+     */
+    private Bitmap removeConnectedBackground(Bitmap source) {
+        int width = source.getWidth();
+        int height = source.getHeight();
+
+        Bitmap result = source.copy(Bitmap.Config.ARGB_8888, true);
+        if (width < 3 || height < 3) return result;
+
+        int[] pixels = new int[width * height];
+        result.getPixels(pixels, 0, width, 0, 0, width, height);
+
+        boolean[] background = new boolean[pixels.length];
+        ArrayDeque<Integer> queue = new ArrayDeque<>();
+
+        // Tomamos varias muestras del borde para estimar el color de fondo.
+        int[] samples = new int[]{
+                pixels[0],
+                pixels[width - 1],
+                pixels[(height - 1) * width],
+                pixels[height * width - 1],
+                pixels[width / 2],
+                pixels[(height - 1) * width + width / 2],
+                pixels[(height / 2) * width],
+                pixels[(height / 2) * width + width - 1]
+        };
+
+        for (int x = 0; x < width; x++) {
+            queue.add(x);
+            queue.add((height - 1) * width + x);
+        }
+        for (int y = 0; y < height; y++) {
+            queue.add(y * width);
+            queue.add(y * width + width - 1);
+        }
+
+        while (!queue.isEmpty()) {
+            int index = queue.removeFirst();
+            if (index < 0 || index >= pixels.length || background[index]) continue;
+
+            int pixel = pixels[index];
+            if (!matchesBackground(pixel, samples)) continue;
+
+            background[index] = true;
+
+            int x = index % width;
+            int y = index / width;
+
+            if (x > 0) queue.add(index - 1);
+            if (x + 1 < width) queue.add(index + 1);
+            if (y > 0) queue.add(index - width);
+            if (y + 1 < height) queue.add(index + width);
+        }
+
+        for (int i = 0; i < pixels.length; i++) {
+            if (background[i]) {
+                pixels[i] = Color.TRANSPARENT;
+            }
+        }
+
+        result.setPixels(pixels, 0, width, 0, 0, width, height);
+        return result;
+    }
+
+    private boolean matchesBackground(int pixel, int[] samples) {
+        int alpha = Color.alpha(pixel);
+        if (alpha < 10) return true;
+
+        int r = Color.red(pixel);
+        int g = Color.green(pixel);
+        int b = Color.blue(pixel);
+
+        /*
+         * Permitimos pequeñas variaciones por antialiasing y compresión.
+         * El fondo de WhatsApp suele ser blanco/gris muy claro, pero usamos
+         * las muestras reales del borde para no depender de un único color.
+         */
+        for (int sample : samples) {
+            if (Color.alpha(sample) < 10) return true;
+
+            int sr = Color.red(sample);
+            int sg = Color.green(sample);
+            int sb = Color.blue(sample);
+
+            int distance = Math.abs(r - sr)
+                    + Math.abs(g - sg)
+                    + Math.abs(b - sb);
+
+            if (distance <= 42) return true;
+        }
+
+        // También eliminamos blancos/grises casi uniformes del borde.
+        int max = Math.max(r, Math.max(g, b));
+        int min = Math.min(r, Math.min(g, b));
+        return max >= 238 && (max - min) <= 18;
     }
 
     private String describeNode(AccessibilityNodeInfo node) {
