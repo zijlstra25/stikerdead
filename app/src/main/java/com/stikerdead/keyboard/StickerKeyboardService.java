@@ -50,6 +50,7 @@ public class StickerKeyboardService extends InputMethodService {
     private boolean symbolsMode = false;
     private TextView suggestionView;
     private PredictionEngine predictionEngine;
+    private final List<TextView> letterKeys = new java.util.ArrayList<>();
 
     @Override
     public void onStartInput(EditorInfo attribute, boolean restarting) {
@@ -164,6 +165,7 @@ public class StickerKeyboardService extends InputMethodService {
         shiftEnabled = false;
         capsLock = false;
         symbolsMode = false;
+        letterKeys.clear();
 
         LinearLayout root = createRoot();
 
@@ -236,13 +238,15 @@ public class StickerKeyboardService extends InputMethodService {
             } else {
                 shiftEnabled = true;
             }
-            shift.setText("⇧");
+            shift.setText(capsLock || shiftEnabled ? "⇧" : "⇧");
+            updateLetterKeyLabels();
         });
         row3.addView(shift, keyParams(1.15f));
 
         for (String letter : new String[]{"Z","X","C","V","B","N","M"}) {
             TextView key = makeKeyButton(letter);
             key.setOnClickListener(v -> typeLetter(letter));
+            letterKeys.add(key);
             row3.addView(key, keyParams(1f));
         }
 
@@ -294,6 +298,7 @@ public class StickerKeyboardService extends InputMethodService {
         for (String letter : letters) {
             TextView key = makeKeyButton(letter);
             key.setOnClickListener(v -> typeLetter(letter));
+            letterKeys.add(key);
             row.addView(key, keyParams(1f));
         }
 
@@ -302,7 +307,7 @@ public class StickerKeyboardService extends InputMethodService {
         ));
     }
 
-    private void typeLetter(String letter) {
+    private void updateLetterKeyLabels() {\n        for (TextView key : letterKeys) {\n            String letter = key.getText().toString();\n            if (letter.length() == 1 && Character.isLetter(letter.charAt(0))) {\n                key.setText((shiftEnabled || capsLock) ? letter.toUpperCase(Locale.ROOT) : letter.toLowerCase(Locale.ROOT));\n            }\n        }\n    }\n\n    private void typeLetter(String letter) {
         if (symbolsMode) return;
         String value = (shiftEnabled || capsLock)
                 ? letter.toUpperCase(Locale.ROOT)
