@@ -5,6 +5,8 @@ import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.BitmapFactory;
+import android.graphics.drawable.Drawable;
 import android.graphics.Paint;
 import android.net.Uri;
 import android.os.Bundle;
@@ -63,7 +65,9 @@ public class StickerKeyboardService extends InputMethodService {
     private String selectedStickerCategory = "recent";
     private final List<ImportedSticker> importedStickers = new ArrayList<>();
     private static final int PICK_STICKERS_REQUEST = 4001;
+    private static final int TAKE_STICKER_PHOTO_REQUEST = 4002;
     private String importCategory = "personal";
+    private Uri pendingPhotoUri;
 
     @Override
     public void onStartInput(EditorInfo attribute, boolean restarting) {
@@ -236,30 +240,83 @@ public class StickerKeyboardService extends InputMethodService {
     }
 
     private void showImportCategoryDialog() {
-        final String[] names = {"WhatsApp", "Instagram", "Facebook", "Discord", "Mis stickers"};
-        final String[] values = {"whatsapp", "instagram", "facebook", "discord", "personal"};
-        new android.app.AlertDialog.Builder(this).setTitle("Importar stickers").setItems(names, (d, which) -> {
-            importCategory = values[which];
-            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-            intent.addCategory(Intent.CATEGORY_OPENABLE);
-            intent.setType("image/*");
-            intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
-            startActivityForResult(intent, PICK_STICKERS_REQUEST);
-        }).setNegativeButton("Cancelar", null).show();
+        final String[] names = {"📷 Sacar foto", "📁 Otras apps / archivos"};
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Agregar sticker")
+                .setItems(names, (d, which) -> {
+                    if (which == 0) {
+                        takeStickerPhoto();
+                    } else {
+                        // Los stickers de las categorías propias se agregan automáticamente
+                        // desde sus respectivos selectores. Esta opción es para fuentes
+                        // que todavía no tienen una categoría propia.
+                        importCategory = "personal";
+                        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                        intent.addCategory(Intent.CATEGORY_OPENABLE);
+                        intent.setType("image/*");
+                        intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+                        startActivityForResult(intent, PICK_STICKERS_REQUEST);
+                    }
+                })
+                .setNegativeButton("Cancelar", null)
+                .show();
+    }
+
+    private void takeStickerPhoto() {
+        try {
+            File dir = new File(getExternalFilesDir(android.os.Environment.DIRECTORY_PICTURES), "stickers");
+            if (!dir.exists() && !dir.mkdirs()) throw new IOException("No se pudo crear la carpeta");
+            File photo = new File(dir, "sticker_photo_" + System.currentTimeMillis() + ".jpg");
+            pendingPhotoUri = FileProvider.getUriForFile(
+                    this,
+                    getPackageName() + ".fileprovider",
+                    photo
+            );
+
+            Intent intent = new Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE);
+            intent.putExtra(android.provider.MediaStore.EXTRA_OUTPUT, pendingPhotoUri);
+            intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivityForResult(intent, TAKE_STICKER_PHOTO_REQUEST);
+        } catch (Exception e) {
+            Toast.makeText(this, "No se pudo abrir la cámara: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+        }
     }
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+
+        if (requestCode == TAKE_STICKER_PHOTO_REQUEST) {
+            if (resultCode == RESULT_OK && pendingPhotoUri != null) {
+                if (importSticker(pendingPhotoUri)) {
+                    selectedStickerCategory = "personal";
+                    setInputView(buildStickerView());
+                    Toast.makeText(this, "Sticker agregado a Mis stickers", Toast.LENGTH_SHORT).show();
+                }
+            }
+            pendingPhotoUri = null;
+            return;
+        }
+
         if (requestCode != PICK_STICKERS_REQUEST || resultCode != RESULT_OK || data == null) return;
+
         ArrayList<Uri> uris = new ArrayList<>();
         if (data.getClipData() != null) {
-            for (int i = 0; i < data.getClipData().getItemCount(); i++) uris.add(data.getClipData().getItemAt(i).getUri());
-        } else if (data.getData() != null) uris.add(data.getData());
+            for (int i = 0; i < data.getClipData().getItemCount(); i++) {
+                uris.add(data.getClipData().getItemAt(i).getUri());
+            }
+        } else if (data.getData() != null) {
+            uris.add(data.getData());
+        }
+
         int count = 0;
         for (Uri uri : uris) if (importSticker(uri)) count++;
-        if (count > 0) { selectedStickerCategory = importCategory; setInputView(buildStickerView());
-            Toast.makeText(this, count + " sticker importado" + (count == 1 ? "" : "s"), Toast.LENGTH_SHORT).show(); }
+
+        if (count > 0) {
+            selectedStickerCategory = "personal";
+            setInputView(buildStickerView());
+            Toast.makeText(this, count + " sticker importado" + (count == 1 ? "" : "s") + " a Mis stickers", Toast.LENGTH_SHORT).show();
+        }
     }
 
     private boolean importSticker(Uri uri) {
