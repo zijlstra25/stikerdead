@@ -5,5 +5,5 @@
     android:notificationTimeout="100"
     android:accessibilityFlags="flagDefault|flagReportViewIds"
     android:canRetrieveWindowContent="true"
-    android:description="@string/accessibility_description"
+    android:description="@string/keyboard_description"
     android:packageNames="com.whatsapp" />
