@@ -163,7 +163,7 @@ public class StickerKeyboardService extends InputMethodService {
         toolbar.setPadding(6, 4, 6, 4);
 
         // Barra superior: sugerencias predictivas a la izquierda y ES + stickers a la derecha.
-        TextView suggestions = makeToolbarButton("Hola     ¿Cómo?     Que");
+        TextView suggestions = makeToolbarButton("Hola");
         suggestions.setContentDescription("Sugerencias predictivas");
         suggestions.setTextSize(15);
         suggestions.setGravity(Gravity.CENTER_VERTICAL | Gravity.LEFT);
