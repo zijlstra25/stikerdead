@@ -47,6 +47,7 @@ public class StickerKeyboardService extends InputMethodService {
     private boolean stickerMode = true;
     private boolean shiftEnabled = true;
     private TextView suggestionView;
+    private PredictionEngine predictionEngine;
 
     @Override
     public void onStartInput(EditorInfo attribute, boolean restarting) {
@@ -167,29 +168,13 @@ public class StickerKeyboardService extends InputMethodService {
         // Barra superior: sugerencias predictivas a la izquierda y ES + stickers a la derecha.
         TextView suggestions = makeToolbarButton("");
         suggestionView = suggestions;
-        updateSuggestion("");
+        predictionEngine = new PredictionEngine(this);
+        updateSuggestionFromCursor(getCurrentInputConnection());
         suggestions.setContentDescription("Sugerencia predictiva");
         suggestions.setTextSize(15);
         suggestions.setGravity(Gravity.CENTER_VERTICAL | Gravity.LEFT);
         suggestions.setPadding(8, 0, 0, 0);
-        suggestions.setOnClickListener(v -> {
-            InputConnection ic = getCurrentInputConnection();
-            if (ic != null) {
-                CharSequence before = ic.getTextBeforeCursor(64, 0);
-                String text = before == null ? "" : before.toString();
-                int end = text.length();
-                int start = end;
-                while (start > 0 && !Character.isWhitespace(text.charAt(start - 1))) {
-                    start--;
-                }
-                int wordLength = end - start;
-                if (wordLength > 0) {
-                    ic.setSelection(end, end);
-                    ic.deleteSurroundingText(wordLength, 0);
-                }
-                ic.commitText(suggestions.getText().toString() + " ", 1);
-            }
-        });
+        suggestions.setOnClickListener(v -> acceptSuggestion());
         toolbar.addView(suggestions, new LinearLayout.LayoutParams(
                 0, 46, 1f
         ));
@@ -351,49 +336,71 @@ public class StickerKeyboardService extends InputMethodService {
 
     private void typeText(String text) {
         InputConnection ic = getCurrentInputConnection();
-        if (ic != null) {
-            ic.commitText(text, 1);
-            updateSuggestionFromCursor(ic);
-        }
-    }
-
-    private void updateSuggestionFromCursor(InputConnection ic) {
-        CharSequence before = ic.getTextBeforeCursor(64, 0);
-        String text = before == null ? "" : before.toString();
-        int end = text.length();
-        int start = end;
-        while (start > 0 && !Character.isWhitespace(text.charAt(start - 1))) {
-            start--;
-        }
-        String current = text.substring(start, end);
-        updateSuggestion(current);
-    }
-
-    private void updateSuggestion(String current) {
-        if (suggestionView == null) return;
-        String prefix = current.toLowerCase(Locale.ROOT);
-        String suggestion;
-        if (prefix.isEmpty()) {
-            suggestion = "Hola";
-        } else if (prefix.length() == 1) {
-            suggestion = prefix.equals("h") ? "hola" : prefix;
-        } else if (prefix.startsWith("ho")) {
-            suggestion = "hola";
-        } else if (prefix.startsWith("hol")) {
-            suggestion = "hola";
-        } else {
-            suggestion = prefix;
-        }
-        suggestionView.setText(suggestion);
+        if (ic == null) return;
+        if (" ".equals(text)) learnCurrentWord(ic);
+        ic.commitText(text, 1);
+        updateSuggestionFromCursor(ic);
     }
 
     private void deleteText() {
         InputConnection ic = getCurrentInputConnection();
         if (ic != null) {
             ic.deleteSurroundingText(1, 0);
+            updateSuggestionFromCursor(ic);
         }
     }
 
+    private void updateSuggestionFromCursor(InputConnection ic) {
+        if (ic == null || suggestionView == null || predictionEngine == null) return;
+        CharSequence before = ic.getTextBeforeCursor(128, 0);
+        String text = before == null ? "" : before.toString();
+        int end = text.length();
+        int start = end;
+        while (start > 0 && !Character.isWhitespace(text.charAt(start - 1))) start--;
+        String current = text.substring(start, end);
+        String previous = "";
+        if (start > 0) {
+            int pEnd = start, pStart = start;
+            while (pStart > 0 && !Character.isWhitespace(text.charAt(pStart - 1))) pStart--;
+            previous = text.substring(pStart, pEnd);
+        }
+        String suggestion = predictionEngine.suggest(current, previous);
+        suggestionView.setText(suggestion.isEmpty() ? current : suggestion);
+    }
+
+    private void acceptSuggestion() {
+        InputConnection ic = getCurrentInputConnection();
+        if (ic == null || suggestionView == null) return;
+        String suggestion = suggestionView.getText().toString().trim();
+        if (suggestion.isEmpty()) return;
+        CharSequence before = ic.getTextBeforeCursor(128, 0);
+        String text = before == null ? "" : before.toString();
+        int end = text.length(), start = end;
+        while (start > 0 && !Character.isWhitespace(text.charAt(start - 1))) start--;
+        int length = end - start;
+        if (length > 0) ic.deleteSurroundingText(length, 0);
+        ic.commitText(suggestion + " ", 1);
+        updateSuggestionFromCursor(ic);
+    }
+
+    private void learnCurrentWord(InputConnection ic) {
+        if (predictionEngine == null) return;
+        CharSequence before = ic.getTextBeforeCursor(128, 0);
+        String text = before == null ? "" : before.toString().trim();
+        if (text.isEmpty()) return;
+        int end = text.length(), start = end;
+        while (start > 0 && !Character.isWhitespace(text.charAt(start - 1))) start--;
+        String word = text.substring(start, end).replaceAll("[^\\p{L}ÁÉÍÓÚÜÑáéíóúüñ]", "");
+        if (word.isEmpty()) return;
+        String previous = "";
+        if (start > 0) {
+            String beforeWord = text.substring(0, start).trim();
+            int pEnd = beforeWord.length(), pStart = pEnd;
+            while (pStart > 0 && !Character.isWhitespace(beforeWord.charAt(pStart - 1))) pStart--;
+            previous = beforeWord.substring(pStart, pEnd);
+        }
+        predictionEngine.learn(word, previous);
+    }
     private void sendSticker(StickerItem sticker, boolean directStickerMode) {
         InputConnection ic = getCurrentInputConnection();
 
