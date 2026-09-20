@@ -10,7 +10,6 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.Gravity;
-import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -23,7 +22,6 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.core.content.FileProvider;
-import androidx.core.view.inputmethod.EditorInfoCompat;
 import androidx.core.view.inputmethod.InputConnectionCompat;
 import androidx.core.view.inputmethod.InputContentInfoCompat;
 
@@ -150,25 +148,39 @@ public class StickerKeyboardService extends InputMethodService {
         grid.addView(button, params);
     }
 
+    // Teclado de escritura inspirado en el diseño de los teclados Android modernos.
+    // El botón de stickers queda arriba a la derecha para volver al panel de stickers.
     private View buildTypingView() {
         stickerMode = false;
         shiftEnabled = true;
 
         LinearLayout root = createRoot();
 
-        TextView title = new TextView(this);
-        title.setText("  TECLADO");
-        title.setGravity(Gravity.CENTER_VERTICAL);
-        title.setTextSize(16);
-        title.setPadding(12, 8, 12, 8);
-        root.addView(title, new LinearLayout.LayoutParams(
+        LinearLayout toolbar = new LinearLayout(this);
+        toolbar.setGravity(Gravity.CENTER_VERTICAL);
+        toolbar.setPadding(6, 4, 6, 4);
+
+        TextView language = makeToolbarButton("ES");
+        toolbar.addView(language, new LinearLayout.LayoutParams(
+                0, 46, 1f
+        ));
+
+        TextView emoji = makeToolbarButton("😊");
+        toolbar.addView(emoji, toolbarButtonParams());
+
+        TextView stickers = makeToolbarButton("🖼");
+        stickers.setContentDescription("Stickers");
+        stickers.setOnClickListener(v -> switchToStickerMode());
+        toolbar.addView(stickers, toolbarButtonParams());
+
+        root.addView(toolbar, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 50
         ));
 
         LinearLayout keys = new LinearLayout(this);
         keys.setOrientation(LinearLayout.VERTICAL);
         keys.setGravity(Gravity.CENTER);
-        keys.setPadding(5, 4, 5, 4);
+        keys.setPadding(4, 3, 4, 3);
         root.addView(keys, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
         ));
@@ -179,39 +191,33 @@ public class StickerKeyboardService extends InputMethodService {
 
         LinearLayout bottom = new LinearLayout(this);
         bottom.setGravity(Gravity.CENTER);
-        bottom.setPadding(3, 3, 3, 3);
+        bottom.setPadding(2, 2, 2, 2);
 
         TextView shift = makeKeyButton("⇧");
         shift.setOnClickListener(v -> {
             shiftEnabled = !shiftEnabled;
             shift.setText(shiftEnabled ? "⇧" : "⇩");
         });
-        bottom.addView(shift, keyParams(0.9f));
+        bottom.addView(shift, keyParams(1f));
 
         TextView comma = makeKeyButton(",");
         comma.setOnClickListener(v -> typeText(","));
-        bottom.addView(comma, keyParams(0.8f));
+        bottom.addView(comma, keyParams(0.9f));
 
-        TextView space = makeKeyButton("ESPACIO");
+        TextView space = makeKeyButton("Espacio");
         space.setOnClickListener(v -> typeText(" "));
-        bottom.addView(space, keyParams(2.8f));
+        bottom.addView(space, keyParams(4.2f));
 
         TextView period = makeKeyButton(".");
         period.setOnClickListener(v -> typeText("."));
-        bottom.addView(period, keyParams(0.8f));
+        bottom.addView(period, keyParams(0.9f));
 
         TextView backspace = makeKeyButton("⌫");
         backspace.setOnClickListener(v -> deleteText());
-        bottom.addView(backspace, keyParams(0.9f));
+        bottom.addView(backspace, keyParams(1f));
 
         keys.addView(bottom, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 58
-        ));
-
-        TextView switchButton = makeActionButton("🖼  STICKERS");
-        switchButton.setOnClickListener(v -> switchToStickerMode());
-        root.addView(switchButton, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, 56
         ));
 
         return root;
@@ -257,6 +263,18 @@ public class StickerKeyboardService extends InputMethodService {
         button.setTextColor(Color.rgb(30, 30, 30));
         button.setBackgroundColor(Color.WHITE);
         return button;
+    }
+
+    private TextView makeToolbarButton(String text) {
+        TextView button = makeKeyButton(text);
+        button.setTextSize(17);
+        return button;
+    }
+
+    private LinearLayout.LayoutParams toolbarButtonParams() {
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(48, 46);
+        params.setMargins(2, 0, 2, 0);
+        return params;
     }
 
     private TextView makeActionButton(String text) {
