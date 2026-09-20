@@ -193,7 +193,7 @@ public class StickerKeyboardService extends InputMethodService {
         LinearLayout keys = new LinearLayout(this);
         keys.setOrientation(LinearLayout.VERTICAL);
         keys.setGravity(Gravity.CENTER);
-        keys.setPadding(4, 3, 4, 3);
+        keys.setPadding(2, 0, 2, 0);
         root.addView(keys, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
         ));
@@ -230,7 +230,7 @@ public class StickerKeyboardService extends InputMethodService {
         bottom.addView(backspace, keyParams(1f));
 
         keys.addView(bottom, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, 66
+                ViewGroup.LayoutParams.MATCH_PARENT, 68
         ));
 
         return root;
@@ -239,7 +239,7 @@ public class StickerKeyboardService extends InputMethodService {
     private void addKeyRow(LinearLayout parent, String[] letters) {
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.CENTER);
-        row.setPadding(1, 2, 1, 2);
+        row.setPadding(1, 0, 1, 0);
 
         for (String letter : letters) {
             TextView key = makeKeyButton(letter);
@@ -257,7 +257,7 @@ public class StickerKeyboardService extends InputMethodService {
         }
 
         parent.addView(row, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, 58
+                ViewGroup.LayoutParams.MATCH_PARENT, 60
         ));
     }
 
@@ -309,7 +309,7 @@ public class StickerKeyboardService extends InputMethodService {
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
                 0, ViewGroup.LayoutParams.MATCH_PARENT, weight
         );
-        params.setMargins(1, 2, 1, 2);
+        params.setMargins(1, 1, 1, 1);
         return params;
     }
 
