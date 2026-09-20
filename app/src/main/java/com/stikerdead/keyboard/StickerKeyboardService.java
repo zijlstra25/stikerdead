@@ -45,7 +45,9 @@ public class StickerKeyboardService extends InputMethodService {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private EditorInfo currentEditorInfo;
     private boolean stickerMode = true;
-    private boolean shiftEnabled = true;
+    private boolean shiftEnabled = false;
+    private boolean capsLock = false;
+    private boolean symbolsMode = false;
     private TextView suggestionView;
     private PredictionEngine predictionEngine;
 
@@ -53,7 +55,9 @@ public class StickerKeyboardService extends InputMethodService {
     public void onStartInput(EditorInfo attribute, boolean restarting) {
         super.onStartInput(attribute, restarting);
         currentEditorInfo = attribute;
-        shiftEnabled = true;
+        shiftEnabled = false;
+        capsLock = false;
+        symbolsMode = false;
         stickerMode = true;
     }
 
@@ -157,7 +161,9 @@ public class StickerKeyboardService extends InputMethodService {
     // El botón de stickers queda arriba a la derecha para volver al panel de stickers.
     private View buildTypingView() {
         stickerMode = false;
-        shiftEnabled = true;
+        shiftEnabled = false;
+        capsLock = false;
+        symbolsMode = false;
 
         LinearLayout root = createRoot();
 
@@ -212,19 +218,46 @@ public class StickerKeyboardService extends InputMethodService {
         ));
 
         addKeyRow(keys, new String[]{"Q","W","E","R","T","Y","U","I","O","P"});
-        addKeyRow(keys, new String[]{"A","S","D","F","G","H","J","K","L"});
-        addKeyRow(keys, new String[]{"Z","X","C","V","B","N","M"});
+        addKeyRow(keys, new String[]{"A","S","D","F","G","H","J","K","L","Ñ"});
+
+        LinearLayout row3 = new LinearLayout(this);
+        row3.setGravity(Gravity.CENTER);
+        row3.setPadding(1, 0, 1, 0);
+
+        TextView shift = makeKeyButton("⇧");
+        shift.setOnClickListener(v -> {
+            if (symbolsMode) return;
+            if (shiftEnabled) {
+                capsLock = true;
+                shiftEnabled = true;
+            } else {
+                shiftEnabled = true;
+            }
+            shift.setText(capsLock ? "⇧" : "⇧");
+        });
+        row3.addView(shift, keyParams(1.15f));
+
+        for (String letter : new String[]{"Z","X","C","V","B","N","M"}) {
+            TextView key = makeKeyButton(letter);
+            key.setOnClickListener(v -> typeLetter(letter));
+            row3.addView(key, keyParams(1f));
+        }
+
+        TextView backspace = makeKeyButton("⌫");
+        backspace.setOnClickListener(v -> deleteText());
+        row3.addView(backspace, keyParams(1.15f));
+        keys.addView(row3, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
+        ));
 
         LinearLayout bottom = new LinearLayout(this);
         bottom.setGravity(Gravity.CENTER);
         bottom.setPadding(2, 2, 2, 2);
 
-        TextView shift = makeKeyButton("⇧");
-        shift.setOnClickListener(v -> {
-            shiftEnabled = !shiftEnabled;
-            shift.setText(shiftEnabled ? "⇧" : "⇩");
-        });
-        bottom.addView(shift, keyParams(1f));
+        TextView symbols = makeKeyButton("?123");
+        symbols.setTextSize(14);
+        symbols.setOnClickListener(v -> toggleSymbolsMode());
+        bottom.addView(symbols, keyParams(1.2f));
 
         TextView comma = makeKeyButton(",");
         comma.setOnClickListener(v -> typeText(","));
@@ -232,15 +265,16 @@ public class StickerKeyboardService extends InputMethodService {
 
         TextView space = makeKeyButton("Espacio");
         space.setOnClickListener(v -> typeText(" "));
-        bottom.addView(space, keyParams(4.2f));
+        bottom.addView(space, keyParams(4.0f));
 
         TextView period = makeKeyButton(".");
         period.setOnClickListener(v -> typeText("."));
         bottom.addView(period, keyParams(0.9f));
 
-        TextView backspace = makeKeyButton("⌫");
-        backspace.setOnClickListener(v -> deleteText());
-        bottom.addView(backspace, keyParams(1f));
+        TextView enter = makeKeyButton("↵");
+        enter.setTextSize(20);
+        enter.setOnClickListener(v -> sendEnter());
+        bottom.addView(enter, keyParams(1.15f));
 
         keys.addView(bottom, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
@@ -256,22 +290,151 @@ public class StickerKeyboardService extends InputMethodService {
 
         for (String letter : letters) {
             TextView key = makeKeyButton(letter);
-            key.setOnClickListener(v -> {
-                String value = letter;
-                if (!shiftEnabled) {
-                    value = value.toLowerCase();
-                }
-                typeText(value);
-                if (shiftEnabled) {
-                    shiftEnabled = false;
-                }
-            });
+            key.setOnClickListener(v -> typeLetter(letter));
             row.addView(key, keyParams(1f));
         }
 
         parent.addView(row, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
         ));
+    }
+
+    private void typeLetter(String letter) {
+        if (symbolsMode) return;
+        String value = (shiftEnabled || capsLock)
+                ? letter.toUpperCase(Locale.ROOT)
+                : letter.toLowerCase(Locale.ROOT);
+        typeText(value);
+
+        // Como Gboard, Shift de un toque sirve para una sola mayúscula.
+        if (shiftEnabled && !capsLock) {
+            shiftEnabled = false;
+        }
+    }
+
+    private void toggleSymbolsMode() {
+        symbolsMode = !symbolsMode;
+        shiftEnabled = false;
+        capsLock = false;
+        setInputView(symbolsMode ? buildSymbolsView() : buildTypingView());
+    }
+
+    private View buildSymbolsView() {
+        LinearLayout root = createRoot();
+
+        // La barra superior es exactamente la misma que en el teclado de letras.
+        LinearLayout toolbar = new LinearLayout(this);
+        toolbar.setGravity(Gravity.CENTER_VERTICAL | Gravity.RIGHT);
+        toolbar.setPadding(6, 4, 6, 4);
+
+        TextView suggestions = makeToolbarButton("");
+        suggestionView = suggestions;
+        predictionEngine = new PredictionEngine(this);
+        updateSuggestionFromCursor(getCurrentInputConnection());
+        suggestions.setContentDescription("Sugerencia predictiva");
+        suggestions.setTextSize(15);
+        suggestions.setGravity(Gravity.CENTER_VERTICAL | Gravity.LEFT);
+        suggestions.setPadding(8, 0, 0, 0);
+        suggestions.setOnClickListener(v -> acceptSuggestion());
+        toolbar.addView(suggestions, new LinearLayout.LayoutParams(0, 46, 1f));
+
+        TextView language = makeToolbarButton("ES");
+        language.setContentDescription("Idioma español");
+        toolbar.addView(language, toolbarSquareParams());
+
+        ImageButton stickers = new ImageButton(this);
+        stickers.setContentDescription("Stickers");
+        stickers.setImageResource(R.drawable.sticker_icon);
+        stickers.setScaleType(ImageButton.ScaleType.FIT_CENTER);
+        stickers.setPadding(0, 0, 0, 0);
+        stickers.setBackgroundColor(Color.WHITE);
+        stickers.setOnClickListener(v -> switchToStickerMode());
+        toolbar.addView(stickers, toolbarSquareParams());
+
+        root.addView(toolbar, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 54
+        ));
+
+        View divider = new View(this);
+        divider.setBackgroundColor(Color.rgb(190, 190, 190));
+        root.addView(divider, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 2
+        ));
+
+        LinearLayout keys = new LinearLayout(this);
+        keys.setOrientation(LinearLayout.VERTICAL);
+        keys.setGravity(Gravity.CENTER);
+        keys.setPadding(2, 0, 2, 0);
+        root.addView(keys, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
+        ));
+
+        addSymbolRow(keys, new String[]{"1","2","3","4","5","6","7","8","9","0"});
+        addSymbolRow(keys, new String[]{"@","#","$","%","&","*","-","+","/","="});
+        addSymbolRow(keys, new String[]{"(",")",""","'",";",":","!","?","¿","¡"});
+
+        LinearLayout bottom = new LinearLayout(this);
+        bottom.setGravity(Gravity.CENTER);
+        bottom.setPadding(2, 2, 2, 2);
+
+        TextView letters = makeKeyButton("ABC");
+        letters.setTextSize(14);
+        letters.setOnClickListener(v -> {
+            symbolsMode = false;
+            setInputView(buildTypingView());
+        });
+        bottom.addView(letters, keyParams(1.2f));
+
+        TextView comma = makeKeyButton(",");
+        comma.setOnClickListener(v -> typeText(","));
+        bottom.addView(comma, keyParams(0.9f));
+
+        TextView space = makeKeyButton("Espacio");
+        space.setOnClickListener(v -> typeText(" "));
+        bottom.addView(space, keyParams(4.0f));
+
+        TextView period = makeKeyButton(".");
+        period.setOnClickListener(v -> typeText("."));
+        bottom.addView(period, keyParams(0.9f));
+
+        TextView enter = makeKeyButton("↵");
+        enter.setTextSize(20);
+        enter.setOnClickListener(v -> sendEnter());
+        bottom.addView(enter, keyParams(1.15f));
+
+        keys.addView(bottom, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
+        ));
+
+        return root;
+    }
+
+    private void addSymbolRow(LinearLayout parent, String[] symbols) {
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER);
+        row.setPadding(1, 0, 1, 0);
+        for (String symbol : symbols) {
+            TextView key = makeKeyButton(symbol);
+            key.setOnClickListener(v -> typeText(symbol));
+            row.addView(key, keyParams(1f));
+        }
+        parent.addView(row, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
+        ));
+    }
+
+    private void sendEnter() {
+        InputConnection ic = getCurrentInputConnection();
+        if (ic == null) return;
+        ic.sendKeyEvent(new android.view.KeyEvent(
+                android.view.KeyEvent.ACTION_DOWN,
+                android.view.KeyEvent.KEYCODE_ENTER
+        ));
+        ic.sendKeyEvent(new android.view.KeyEvent(
+                android.view.KeyEvent.ACTION_UP,
+                android.view.KeyEvent.KEYCODE_ENTER
+        ));
+        updateSuggestionFromCursor(ic);
     }
 
     private LinearLayout createRoot() {
