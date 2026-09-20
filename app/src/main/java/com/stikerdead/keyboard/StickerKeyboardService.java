@@ -225,21 +225,77 @@ public class StickerKeyboardService extends InputMethodService {
         try {
             File source = new File(sticker.path);
             File dir = new File(getCacheDir(), "stickers");
-            if (!dir.exists()) dir.mkdirs();
+            if (!dir.exists() && !dir.mkdirs()) throw new IOException("No se pudo crear el directorio");
+
+            Bitmap sourceBitmap = BitmapFactory.decodeFile(source.getAbsolutePath());
+            if (sourceBitmap == null) throw new IOException("No se pudo leer el sticker");
+
             File output = new File(dir, sticker.id + (direct ? ".webp" : ".png"));
-            Bitmap bitmap = BitmapFactory.decodeFile(source.getAbsolutePath());
-            if (bitmap == null) throw new IOException("No se pudo leer el sticker");
-            try (FileOutputStream out = new FileOutputStream(output)) {
-                bitmap.compress(direct ? Bitmap.CompressFormat.WEBP_LOSSY : Bitmap.CompressFormat.PNG, 90, out);
-            } finally {
-                bitmap.recycle();
+
+            if (direct) {
+                // WhatsApp espera un sticker estático de 512x512 en WebP.
+                // La imagen importada se ajusta dentro de un lienzo transparente
+                // para conservar la proporción y evitar que se rechace por tamaño.
+                Bitmap stickerBitmap = Bitmap.createBitmap(512, 512, Bitmap.Config.ARGB_8888);
+                Canvas canvas = new Canvas(stickerBitmap);
+                canvas.drawColor(Color.TRANSPARENT, android.graphics.PorterDuff.Mode.CLEAR);
+
+                float scale = Math.min(
+                        512f / sourceBitmap.getWidth(),
+                        512f / sourceBitmap.getHeight()
+                );
+                int width = Math.max(1, Math.round(sourceBitmap.getWidth() * scale));
+                int height = Math.max(1, Math.round(sourceBitmap.getHeight() * scale));
+                int left = (512 - width) / 2;
+                int top = (512 - height) / 2;
+
+                Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+                canvas.drawBitmap(sourceBitmap, null,
+                        new android.graphics.Rect(left, top, left + width, top + height),
+                        paint);
+
+                // Intentamos mantener el archivo por debajo de 100 KB, que es
+                // el límite habitual de WhatsApp para stickers estáticos.
+                boolean saved = false;
+                for (int quality = 90; quality >= 30; quality -= 10) {
+                    try (FileOutputStream out = new FileOutputStream(output)) {
+                        stickerBitmap.compress(Bitmap.CompressFormat.WEBP_LOSSY, quality, out);
+                    }
+                    if (output.length() <= 100 * 1024L) {
+                        saved = true;
+                        break;
+                    }
+                }
+                if (!saved) {
+                    try (FileOutputStream out = new FileOutputStream(output)) {
+                        stickerBitmap.compress(Bitmap.CompressFormat.WEBP_LOSSY, 20, out);
+                    }
+                }
+                stickerBitmap.recycle();
+            } else {
+                // En pulsación larga mantenemos una imagen PNG para que WhatsApp
+                // muestre su menú de edición/agregado como imagen.
+                try (FileOutputStream out = new FileOutputStream(output)) {
+                    sourceBitmap.compress(Bitmap.CompressFormat.PNG, 100, out);
+                }
             }
+
+            sourceBitmap.recycle();
+
             Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", output);
             String mime = direct ? "image/webp.wasticker" : "image/png";
             InputContentInfoCompat info = new InputContentInfoCompat(uri,
                     new ClipDescription("sticker", new String[]{mime}), null);
-            InputConnectionCompat.commitContent(ic, currentEditorInfo, info,
-                    InputConnectionCompat.INPUT_CONTENT_GRANT_READ_URI_PERMISSION, new Bundle());
+            boolean accepted = InputConnectionCompat.commitContent(
+                    ic, currentEditorInfo, info,
+                    InputConnectionCompat.INPUT_CONTENT_GRANT_READ_URI_PERMISSION,
+                    new Bundle()
+            );
+            if (!accepted) {
+                Toast.makeText(this,
+                        direct ? "WhatsApp no aceptó el sticker" : "La app rechazó la imagen",
+                        Toast.LENGTH_SHORT).show();
+            }
         } catch (Exception e) {
             Toast.makeText(this, "Error preparando sticker: " + e.getMessage(), Toast.LENGTH_SHORT).show();
         }
