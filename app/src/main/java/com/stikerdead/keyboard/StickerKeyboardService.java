@@ -10,6 +10,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -42,11 +43,15 @@ public class StickerKeyboardService extends InputMethodService {
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private EditorInfo currentEditorInfo;
+    private boolean stickerMode = true;
+    private boolean shiftEnabled = true;
 
     @Override
     public void onStartInput(EditorInfo attribute, boolean restarting) {
         super.onStartInput(attribute, restarting);
         currentEditorInfo = attribute;
+        shiftEnabled = true;
+        stickerMode = true;
     }
 
     @Override
@@ -57,9 +62,13 @@ public class StickerKeyboardService extends InputMethodService {
 
     @Override
     public View onCreateInputView() {
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(Color.rgb(245, 245, 245));
+        return buildStickerView();
+    }
+
+    private View buildStickerView() {
+        stickerMode = true;
+
+        LinearLayout root = createRoot();
 
         TextView header = new TextView(this);
         header.setText("  😀  EMOJIS       STICKERS");
@@ -78,57 +87,213 @@ public class StickerKeyboardService extends InputMethodService {
         ));
 
         for (StickerItem sticker : STICKERS) {
-            TextView button = new TextView(this);
-            button.setText(sticker.label());
-            button.setTextSize(42);
-            button.setGravity(Gravity.CENTER);
-            button.setBackgroundColor(Color.WHITE);
-
-            final boolean[] longPressTriggered = {false};
-            final Runnable[] longPressAction = {null};
-
-            button.setOnTouchListener((v, event) -> {
-                switch (event.getActionMasked()) {
-                    case MotionEvent.ACTION_DOWN:
-                        longPressTriggered[0] = false;
-                        Runnable runnable = () -> {
-                            longPressTriggered[0] = true;
-                            sendSticker(sticker, false);
-                        };
-                        longPressAction[0] = runnable;
-                        handler.postDelayed(runnable, LONG_PRESS_MS);
-                        return true;
-
-                    case MotionEvent.ACTION_UP:
-                        if (longPressAction[0] != null) {
-                            handler.removeCallbacks(longPressAction[0]);
-                        }
-                        if (!longPressTriggered[0]) {
-                            sendSticker(sticker, true);
-                        }
-                        v.performClick();
-                        return true;
-
-                    case MotionEvent.ACTION_CANCEL:
-                        if (longPressAction[0] != null) {
-                            handler.removeCallbacks(longPressAction[0]);
-                        }
-                        return true;
-
-                    default:
-                        return true;
-                }
-            });
-
-            GridLayout.LayoutParams params = new GridLayout.LayoutParams();
-            params.width = 0;
-            params.height = 120;
-            params.columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f);
-            params.setMargins(6, 6, 6, 6);
-            grid.addView(button, params);
+            addStickerButton(grid, sticker);
         }
 
+        TextView switchButton = makeActionButton("⌨  ESCRIBIR");
+        switchButton.setOnClickListener(v -> switchToTypingMode());
+        root.addView(switchButton, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 56
+        ));
+
         return root;
+    }
+
+    private void addStickerButton(GridLayout grid, StickerItem sticker) {
+        TextView button = new TextView(this);
+        button.setText(sticker.label());
+        button.setTextSize(42);
+        button.setGravity(Gravity.CENTER);
+        button.setBackgroundColor(Color.WHITE);
+
+        final boolean[] longPressTriggered = {false};
+        final Runnable[] longPressAction = {null};
+
+        button.setOnTouchListener((v, event) -> {
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    longPressTriggered[0] = false;
+                    Runnable runnable = () -> {
+                        longPressTriggered[0] = true;
+                        sendSticker(sticker, false);
+                    };
+                    longPressAction[0] = runnable;
+                    handler.postDelayed(runnable, LONG_PRESS_MS);
+                    return true;
+
+                case MotionEvent.ACTION_UP:
+                    if (longPressAction[0] != null) {
+                        handler.removeCallbacks(longPressAction[0]);
+                    }
+                    if (!longPressTriggered[0]) {
+                        sendSticker(sticker, true);
+                    }
+                    v.performClick();
+                    return true;
+
+                case MotionEvent.ACTION_CANCEL:
+                    if (longPressAction[0] != null) {
+                        handler.removeCallbacks(longPressAction[0]);
+                    }
+                    return true;
+
+                default:
+                    return true;
+            }
+        });
+
+        GridLayout.LayoutParams params = new GridLayout.LayoutParams();
+        params.width = 0;
+        params.height = 120;
+        params.columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f);
+        params.setMargins(6, 6, 6, 6);
+        grid.addView(button, params);
+    }
+
+    private View buildTypingView() {
+        stickerMode = false;
+        shiftEnabled = true;
+
+        LinearLayout root = createRoot();
+
+        TextView title = new TextView(this);
+        title.setText("  TECLADO");
+        title.setGravity(Gravity.CENTER_VERTICAL);
+        title.setTextSize(16);
+        title.setPadding(12, 8, 12, 8);
+        root.addView(title, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 50
+        ));
+
+        LinearLayout keys = new LinearLayout(this);
+        keys.setOrientation(LinearLayout.VERTICAL);
+        keys.setGravity(Gravity.CENTER);
+        keys.setPadding(5, 4, 5, 4);
+        root.addView(keys, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
+        ));
+
+        addKeyRow(keys, new String[]{"Q","W","E","R","T","Y","U","I","O","P"});
+        addKeyRow(keys, new String[]{"A","S","D","F","G","H","J","K","L"});
+        addKeyRow(keys, new String[]{"Z","X","C","V","B","N","M"});
+
+        LinearLayout bottom = new LinearLayout(this);
+        bottom.setGravity(Gravity.CENTER);
+        bottom.setPadding(3, 3, 3, 3);
+
+        TextView shift = makeKeyButton("⇧");
+        shift.setOnClickListener(v -> {
+            shiftEnabled = !shiftEnabled;
+            shift.setText(shiftEnabled ? "⇧" : "⇩");
+        });
+        bottom.addView(shift, keyParams(0.9f));
+
+        TextView comma = makeKeyButton(",");
+        comma.setOnClickListener(v -> typeText(","));
+        bottom.addView(comma, keyParams(0.8f));
+
+        TextView space = makeKeyButton("ESPACIO");
+        space.setOnClickListener(v -> typeText(" "));
+        bottom.addView(space, keyParams(2.8f));
+
+        TextView period = makeKeyButton(".");
+        period.setOnClickListener(v -> typeText("."));
+        bottom.addView(period, keyParams(0.8f));
+
+        TextView backspace = makeKeyButton("⌫");
+        backspace.setOnClickListener(v -> deleteText());
+        bottom.addView(backspace, keyParams(0.9f));
+
+        keys.addView(bottom, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 58
+        ));
+
+        TextView switchButton = makeActionButton("🖼  STICKERS");
+        switchButton.setOnClickListener(v -> switchToStickerMode());
+        root.addView(switchButton, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 56
+        ));
+
+        return root;
+    }
+
+    private void addKeyRow(LinearLayout parent, String[] letters) {
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER);
+        row.setPadding(2, 2, 2, 2);
+
+        for (String letter : letters) {
+            TextView key = makeKeyButton(letter);
+            key.setOnClickListener(v -> {
+                String value = letter;
+                if (!shiftEnabled) {
+                    value = value.toLowerCase();
+                }
+                typeText(value);
+                if (shiftEnabled) {
+                    shiftEnabled = false;
+                }
+            });
+            row.addView(key, keyParams(1f));
+        }
+
+        parent.addView(row, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 58
+        ));
+    }
+
+    private LinearLayout createRoot() {
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(Color.rgb(245, 245, 245));
+        return root;
+    }
+
+    private TextView makeKeyButton(String text) {
+        TextView button = new TextView(this);
+        button.setText(text);
+        button.setTextSize(18);
+        button.setGravity(Gravity.CENTER);
+        button.setTextColor(Color.rgb(30, 30, 30));
+        button.setBackgroundColor(Color.WHITE);
+        return button;
+    }
+
+    private TextView makeActionButton(String text) {
+        TextView button = makeKeyButton(text);
+        button.setTextSize(15);
+        button.setGravity(Gravity.CENTER);
+        return button;
+    }
+
+    private LinearLayout.LayoutParams keyParams(float weight) {
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.MATCH_PARENT, weight
+        );
+        params.setMargins(2, 2, 2, 2);
+        return params;
+    }
+
+    private void switchToTypingMode() {
+        setInputView(buildTypingView());
+    }
+
+    private void switchToStickerMode() {
+        setInputView(buildStickerView());
+    }
+
+    private void typeText(String text) {
+        InputConnection ic = getCurrentInputConnection();
+        if (ic != null) {
+            ic.commitText(text, 1);
+        }
+    }
+
+    private void deleteText() {
+        InputConnection ic = getCurrentInputConnection();
+        if (ic != null) {
+            ic.deleteSurroundingText(1, 0);
+        }
     }
 
     private void sendSticker(StickerItem sticker, boolean directStickerMode) {
