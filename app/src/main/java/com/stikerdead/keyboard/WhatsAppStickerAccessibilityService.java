@@ -21,6 +21,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class WhatsAppStickerAccessibilityService extends AccessibilityService {
     private static final String TAG = "StickerDeadWA";
@@ -40,8 +42,10 @@ public class WhatsAppStickerAccessibilityService extends AccessibilityService {
      */
     private boolean stickerPickerActive = false;
     private long lastCaptureAt = 0L;
+    private long lastTreeRefreshAt = 0L;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final List<StickerTile> cachedTiles = new ArrayList<>();
+    private final ExecutorService imageExecutor = Executors.newSingleThreadExecutor();
 
     private static final class StickerTile {
         final Rect bounds;
@@ -69,24 +73,28 @@ public class WhatsAppStickerAccessibilityService extends AccessibilityService {
         int type = event.getEventType();
         AccessibilityNodeInfo source = event.getSource();
 
-        if (type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
-                || type == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
-                || type == AccessibilityEvent.TYPE_VIEW_SCROLLED) {
+        if (type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             if (containsStickerHint(source) || eventContainsStickerHint(event)
                     || rootContainsStickerHint()) {
-                stickerPickerActive = true;
-                refreshStickerTiles();
-                Log.d(TAG, "Sticker picker detected; cached tiles=" + cachedTiles.size());
+                activateStickerPicker();
+            } else {
+                stickerPickerActive = false;
+                cachedTiles.clear();
+            }
+            return;
+        }
+
+        if (type == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+                || type == AccessibilityEvent.TYPE_VIEW_SCROLLED) {
+            if (source != null && containsStickerHint(source)) {
+                activateStickerPicker();
+            } else if (stickerPickerActive) {
+                scheduleTileRefresh();
             }
             return;
         }
 
         if (source == null) return;
-
-        if (containsStickerHint(source) || rootContainsStickerHint()) {
-            stickerPickerActive = true;
-            refreshStickerTiles();
-        }
 
         if (type != AccessibilityEvent.TYPE_VIEW_CLICKED
                 && type != AccessibilityEvent.TYPE_VIEW_SELECTED
@@ -125,7 +133,22 @@ public class WhatsAppStickerAccessibilityService extends AccessibilityService {
         handler.postDelayed(() -> captureClickedSticker(stickerBounds), 20L);
     }
 
+    private void activateStickerPicker() {
+        stickerPickerActive = true;
+        scheduleTileRefresh();
+    }
+
+    private void scheduleTileRefresh() {
+        long now = android.os.SystemClock.uptimeMillis();
+        long delay = Math.max(0L, 120L - (now - lastTreeRefreshAt));
+        handler.removeCallbacks(tileRefreshRunnable);
+        handler.postDelayed(tileRefreshRunnable, delay);
+    }
+
+    private final Runnable tileRefreshRunnable = this::refreshStickerTiles;
+
     private void refreshStickerTiles() {
+        lastTreeRefreshAt = android.os.SystemClock.uptimeMillis();
         AccessibilityNodeInfo root = getRootInActiveWindow();
         if (root == null) return;
 
@@ -163,7 +186,6 @@ public class WhatsAppStickerAccessibilityService extends AccessibilityService {
         if (count < 4 || count > 60) return;
 
         List<Rect> candidateBounds = new ArrayList<>();
-        List<AccessibilityNodeInfo> candidateNodes = new ArrayList<>();
 
         for (int i = 0; i < count; i++) {
             AccessibilityNodeInfo child = container.getChild(i);
@@ -185,7 +207,6 @@ public class WhatsAppStickerAccessibilityService extends AccessibilityService {
             if (!clickable && !imageLike) continue;
 
             candidateBounds.add(bounds);
-            candidateNodes.add(child);
         }
 
         if (candidateBounds.size() < 4) return;
@@ -589,7 +610,7 @@ public class WhatsAppStickerAccessibilityService extends AccessibilityService {
                             new TakeScreenshotCallback() {
                                 @Override
                                 public void onSuccess(ScreenshotResult screenshot) {
-                                    processScreenshot(screenshot, safeBounds);
+                                    imageExecutor.execute(() -> processScreenshot(screenshot, safeBounds));
                                 }
 
                                 @Override
@@ -615,7 +636,7 @@ public class WhatsAppStickerAccessibilityService extends AccessibilityService {
                 new TakeScreenshotCallback() {
                     @Override
                     public void onSuccess(ScreenshotResult screenshot) {
-                        processScreenshot(screenshot, bounds);
+                        imageExecutor.execute(() -> processScreenshot(screenshot, bounds));
                     }
 
                     @Override
@@ -856,5 +877,12 @@ public class WhatsAppStickerAccessibilityService extends AccessibilityService {
 
     @Override
     public void onInterrupt() {
+    }
+
+    @Override
+    public void onDestroy() {
+        handler.removeCallbacks(tileRefreshRunnable);
+        imageExecutor.shutdownNow();
+        super.onDestroy();
     }
 }
