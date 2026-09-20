@@ -174,8 +174,19 @@ public class StickerKeyboardService extends InputMethodService {
         language.setContentDescription("Idioma español");
         toolbar.addView(language, toolbarSquareParams());
 
-        TextView stickers = makeToolbarButton("🖼");
+        TextView stickers = makeToolbarButton("");
         stickers.setContentDescription("Stickers");
+        stickers.setGravity(Gravity.CENTER);
+        android.graphics.drawable.Drawable stickerIcon = androidx.core.content.ContextCompat.getDrawable(
+                this,
+                R.drawable.sticker_icon
+        );
+        if (stickerIcon != null) {
+            int iconSize = (int) (32 * getResources().getDisplayMetrics().density);
+            stickerIcon.setBounds(0, 0, iconSize, iconSize);
+            stickers.setCompoundDrawables(stickerIcon, null, null, null);
+            stickers.setCompoundDrawablePadding(0);
+        }
         stickers.setOnClickListener(v -> switchToStickerMode());
         toolbar.addView(stickers, toolbarSquareParams());
 
