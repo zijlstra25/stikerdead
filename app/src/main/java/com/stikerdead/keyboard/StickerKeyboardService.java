@@ -182,8 +182,9 @@ public class StickerKeyboardService extends InputMethodService {
                 R.drawable.sticker_icon
         );
         if (stickerIcon != null) {
-            int iconSize = (int) (32 * getResources().getDisplayMetrics().density);
-            stickerIcon.setBounds(0, 0, iconSize, iconSize);
+            int iconWidth = (int) (50 * getResources().getDisplayMetrics().density);
+            int iconHeight = (int) (42 * getResources().getDisplayMetrics().density);
+            stickerIcon.setBounds(0, 0, iconWidth, iconHeight);
             stickers.setCompoundDrawables(stickerIcon, null, null, null);
             stickers.setCompoundDrawablePadding(0);
         }
