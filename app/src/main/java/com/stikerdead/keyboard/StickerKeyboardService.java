@@ -104,12 +104,10 @@ public class StickerKeyboardService extends InputMethodService {
         addCategoryTextButton(categories, "⭐ Favoritos", "Stickers favoritos", v ->
                 Toast.makeText(this, "Todavía no hay stickers favoritos", Toast.LENGTH_SHORT).show());
 
-        addCategoryIconButton(categories, R.drawable.whatsapp, "WhatsApp", "Stickers de WhatsApp");
-        addCategoryTextButton(categories, "Telegram", "Stickers de Telegram", v ->
-                Toast.makeText(this, "Stickers de Telegram", Toast.LENGTH_SHORT).show());
-        addCategoryIconButton(categories, R.drawable.instagram, "Instagram", "Stickers de Instagram");
-        addCategoryIconButton(categories, R.drawable.facebook, "Facebook", "Stickers de Facebook");
-        addCategoryIconButton(categories, R.drawable.discordia, "Discord", "Stickers de Discord");
+        addCategoryIconButton(categories, R.drawable.whatsapp, "Stickers de WhatsApp");
+        addCategoryIconButton(categories, R.drawable.instagram, "Stickers de Instagram");
+        addCategoryIconButton(categories, R.drawable.facebook, "Stickers de Facebook");
+        addCategoryIconButton(categories, R.drawable.discordia, "Stickers de Discord");
         addCategoryTextButton(categories, "Mis stickers", "Mis stickers", v -> showAllStickers());
 
         categoryScroll.addView(categories, new ViewGroup.LayoutParams(
@@ -179,38 +177,21 @@ public class StickerKeyboardService extends InputMethodService {
     private void addCategoryIconButton(
             LinearLayout parent,
             int drawableRes,
-            String label,
             String contentDescription
     ) {
-        LinearLayout item = new LinearLayout(this);
-        item.setOrientation(LinearLayout.VERTICAL);
-        item.setGravity(Gravity.CENTER);
-        item.setPadding(4, 2, 4, 2);
-        item.setContentDescription(contentDescription);
-
         ImageButton icon = new ImageButton(this);
         icon.setImageResource(drawableRes);
         icon.setScaleType(ImageButton.ScaleType.FIT_CENTER);
-        icon.setPadding(7, 5, 7, 2);
+        icon.setPadding(7, 7, 7, 7);
         icon.setBackgroundColor(Color.WHITE);
         icon.setContentDescription(contentDescription);
+
         icon.setOnClickListener(v ->
-                Toast.makeText(this, label + ": stickers", Toast.LENGTH_SHORT).show());
+                Toast.makeText(this, contentDescription, Toast.LENGTH_SHORT).show());
 
-        item.addView(icon, new LinearLayout.LayoutParams(48, 48));
-
-        TextView text = new TextView(this);
-        text.setText(label);
-        text.setTextSize(10);
-        text.setTextColor(Color.rgb(40, 40, 40));
-        text.setGravity(Gravity.CENTER);
-        item.addView(text, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, 18
-        ));
-
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(64, 68);
-        params.setMargins(2, 0, 2, 0);
-        parent.addView(item, params);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(58, 58);
+        params.setMargins(3, 2, 3, 2);
+        parent.addView(icon, params);
     }
 
     private void addStickerButton(GridLayout grid, StickerItem sticker) {
