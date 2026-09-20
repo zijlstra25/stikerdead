@@ -150,7 +150,88 @@ public class StickerKeyboardService extends InputMethodService {
         grid.removeAllViews();
         for (StickerItem sticker : STICKERS) {
             if ("favorites".equals(selectedStickerCategory) && !favoriteStickerIds.contains(sticker.id())) continue;
+            if (!"recent".equals(selectedStickerCategory) && !"favorites".equals(selectedStickerCategory)
+                    && !"whatsapp".equals(selectedStickerCategory) && !"personal".equals(selectedStickerCategory)) continue;
             addStickerButton(grid, sticker);
+        }
+        for (ImportedSticker sticker : importedStickers) {
+            if ("favorites".equals(selectedStickerCategory)) {
+                if (!favoriteStickerIds.contains(sticker.id)) continue;
+            } else if ("recent".equals(selectedStickerCategory)) {
+                // mostrar
+            } else if (!selectedStickerCategory.equals(sticker.category)) {
+                continue;
+            }
+            addImportedStickerButton(grid, sticker);
+        }
+    }
+
+    private void addImportedStickerButton(GridLayout grid, ImportedSticker sticker) {
+        FrameLayout cell = new FrameLayout(this);
+        ImageView image = new ImageView(this);
+        image.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        image.setImageDrawable(Drawable.createFromPath(sticker.path));
+        cell.addView(image, new FrameLayout.LayoutParams(-1, -1));
+
+        final boolean[] longPress = {false};
+        final Runnable[] action = {null};
+        image.setOnTouchListener((v, event) -> {
+            if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                longPress[0] = false;
+                action[0] = () -> { longPress[0] = true; sendImportedSticker(sticker, false); };
+                handler.postDelayed(action[0], LONG_PRESS_MS);
+                return true;
+            }
+            if (event.getActionMasked() == MotionEvent.ACTION_UP) {
+                if (action[0] != null) handler.removeCallbacks(action[0]);
+                if (!longPress[0]) sendImportedSticker(sticker, true);
+                return true;
+            }
+            if (event.getActionMasked() == MotionEvent.ACTION_CANCEL && action[0] != null) handler.removeCallbacks(action[0]);
+            return true;
+        });
+
+        TextView favorite = new TextView(this);
+        favorite.setText(favoriteStickerIds.contains(sticker.id) ? "★" : "☆");
+        favorite.setTextSize(20);
+        favorite.setGravity(Gravity.CENTER);
+        favorite.setBackgroundColor(Color.WHITE);
+        favorite.setOnClickListener(v -> {
+            toggleFavorite(sticker.id);
+            favorite.setText(favoriteStickerIds.contains(sticker.id) ? "★" : "☆");
+        });
+        cell.addView(favorite, new FrameLayout.LayoutParams(44, 44, Gravity.TOP | Gravity.RIGHT));
+
+        GridLayout.LayoutParams p = new GridLayout.LayoutParams();
+        p.width = 0; p.height = 120;
+        p.columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f);
+        p.setMargins(6, 6, 6, 6);
+        grid.addView(cell, p);
+    }
+
+    private void sendImportedSticker(ImportedSticker sticker, boolean direct) {
+        InputConnection ic = getCurrentInputConnection();
+        if (ic == null || currentEditorInfo == null) return;
+        try {
+            File source = new File(sticker.path);
+            File dir = new File(getCacheDir(), "stickers");
+            if (!dir.exists()) dir.mkdirs();
+            File output = new File(dir, sticker.id + (direct ? ".webp" : ".png"));
+            Bitmap bitmap = BitmapFactory.decodeFile(source.getAbsolutePath());
+            if (bitmap == null) throw new IOException("No se pudo leer el sticker");
+            try (FileOutputStream out = new FileOutputStream(output)) {
+                bitmap.compress(direct ? Bitmap.CompressFormat.WEBP_LOSSY : Bitmap.CompressFormat.PNG, 90, out);
+            } finally {
+                bitmap.recycle();
+            }
+            Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", output);
+            String mime = direct ? "image/webp.wasticker" : "image/png";
+            InputContentInfoCompat info = new InputContentInfoCompat(uri,
+                    new ClipDescription("sticker", new String[]{mime}), null);
+            InputConnectionCompat.commitContent(ic, currentEditorInfo, info,
+                    InputConnectionCompat.INPUT_CONTENT_GRANT_READ_URI_PERMISSION, new Bundle());
+        } catch (Exception e) {
+            Toast.makeText(this, "Error preparando sticker: " + e.getMessage(), Toast.LENGTH_SHORT).show();
         }
     }
 
