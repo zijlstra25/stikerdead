@@ -18,6 +18,7 @@ import android.view.inputmethod.InputConnection;
 import android.inputmethodservice.InputMethodService;
 import android.view.inputmethod.EditorInfo;
 import java.util.Locale;
+import android.widget.FrameLayout;
 import android.widget.GridLayout;
 import android.widget.HorizontalScrollView;
 import android.widget.ImageButton;
@@ -32,7 +33,9 @@ import androidx.core.view.inputmethod.InputContentInfoCompat;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class StickerKeyboardService extends InputMethodService {
 
@@ -52,6 +55,8 @@ public class StickerKeyboardService extends InputMethodService {
     private TextView suggestionView;
     private PredictionEngine predictionEngine;
     private final List<TextView> letterKeys = new java.util.ArrayList<>();
+    private final Set<String> favoriteStickerIds = new HashSet<>();
+    private String selectedStickerCategory = "recent";
 
     @Override
     public void onStartInput(EditorInfo attribute, boolean restarting) {
@@ -76,6 +81,7 @@ public class StickerKeyboardService extends InputMethodService {
 
     private View buildStickerView() {
         stickerMode = true;
+        loadFavorites();
 
         LinearLayout root = createRoot();
 
@@ -100,15 +106,14 @@ public class StickerKeyboardService extends InputMethodService {
         addCategoryTextButton(categories, "＋", "Agregar sticker", v ->
                 Toast.makeText(this, "Próximamente: importar/crear sticker", Toast.LENGTH_SHORT).show());
 
-        addCategoryTextButton(categories, "Recientes", "Stickers recientes", v -> showAllStickers());
-        addCategoryTextButton(categories, "⭐ Favoritos", "Stickers favoritos", v ->
-                Toast.makeText(this, "Todavía no hay stickers favoritos", Toast.LENGTH_SHORT).show());
+        addCategoryTextButton(categories, "Recientes", "Stickers recientes", v -> showStickerCategory("recent"));
+        addCategoryTextButton(categories, "⭐ Favoritos", "Stickers favoritos", v -> showStickerCategory("favorites"));
 
-        addCategoryIconButton(categories, R.drawable.whatsapp, "Stickers de WhatsApp");
-        addCategoryIconButton(categories, R.drawable.instagram, "Stickers de Instagram");
-        addCategoryIconButton(categories, R.drawable.facebook, "Stickers de Facebook");
-        addCategoryIconButton(categories, R.drawable.discordia, "Stickers de Discord");
-        addCategoryTextButton(categories, "Mis stickers", "Mis stickers", v -> showAllStickers());
+        addCategoryIconButton(categories, R.drawable.whatsapp, "Stickers de WhatsApp", "whatsapp");
+        addCategoryIconButton(categories, R.drawable.instagram, "Stickers de Instagram", "instagram");
+        addCategoryIconButton(categories, R.drawable.facebook, "Stickers de Facebook", "facebook");
+        addCategoryIconButton(categories, R.drawable.discordia, "Stickers de Discord", "discord");
+        addCategoryTextButton(categories, "Mis stickers", "Mis stickers", v -> showStickerCategory("personal"));
 
         categoryScroll.addView(categories, new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -145,13 +150,45 @@ public class StickerKeyboardService extends InputMethodService {
     private void showStickersInGrid(GridLayout grid) {
         grid.removeAllViews();
         for (StickerItem sticker : STICKERS) {
+            if ("favorites".equals(selectedStickerCategory) && !favoriteStickerIds.contains(sticker.id())) continue;
             addStickerButton(grid, sticker);
         }
     }
 
-    private void showAllStickers() {
-        // Mantiene la colección actual y deja preparada la vista para futuras categorías.
+    private void showStickerCategory(String category) {
+        selectedStickerCategory = category;
         setInputView(buildStickerView());
+    }
+
+    private void showAllStickers() {
+        showStickerCategory("recent");
+    }
+
+    private void loadFavorites() {
+        String saved = getSharedPreferences("stickers", MODE_PRIVATE)
+                .getString("favorites", "");
+        favoriteStickerIds.clear();
+        if (saved == null || saved.isEmpty()) return;
+        for (String id : saved.split(",")) {
+            if (!id.isEmpty()) favoriteStickerIds.add(id);
+        }
+    }
+
+    private void toggleFavorite(String id) {
+        if (favoriteStickerIds.contains(id)) {
+            favoriteStickerIds.remove(id);
+        } else {
+            favoriteStickerIds.add(id);
+        }
+        StringBuilder saved = new StringBuilder();
+        for (String favoriteId : favoriteStickerIds) {
+            if (saved.length() > 0) saved.append(",");
+            saved.append(favoriteId);
+        }
+        getSharedPreferences("stickers", MODE_PRIVATE)
+                .edit()
+                .putString("favorites", saved.toString())
+                .apply();
     }
 
     private void addCategoryTextButton(
@@ -177,7 +214,8 @@ public class StickerKeyboardService extends InputMethodService {
     private void addCategoryIconButton(
             LinearLayout parent,
             int drawableRes,
-            String contentDescription
+            String contentDescription,
+            String category
     ) {
         ImageButton icon = new ImageButton(this);
         icon.setImageResource(drawableRes);
@@ -186,8 +224,7 @@ public class StickerKeyboardService extends InputMethodService {
         icon.setBackgroundColor(Color.WHITE);
         icon.setContentDescription(contentDescription);
 
-        icon.setOnClickListener(v ->
-                Toast.makeText(this, contentDescription, Toast.LENGTH_SHORT).show());
+        icon.setOnClickListener(v -> showStickerCategory(category));
 
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(58, 58);
         params.setMargins(3, 2, 3, 2);
