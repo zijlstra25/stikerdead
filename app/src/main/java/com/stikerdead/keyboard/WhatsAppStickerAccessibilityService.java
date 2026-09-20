@@ -8,6 +8,8 @@ import android.graphics.Rect;
 import android.hardware.HardwareBuffer;
 import android.os.Build;
 import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
@@ -28,6 +30,7 @@ public class WhatsAppStickerAccessibilityService extends AccessibilityService {
     // immediately from the WhatsApp UI as a fallback.
     private boolean stickerPickerActive = false;
     private long lastCaptureAt = 0L;
+    private final Handler handler = new Handler(Looper.getMainLooper());
 
     @Override
     protected void onServiceConnected() {
@@ -47,7 +50,8 @@ public class WhatsAppStickerAccessibilityService extends AccessibilityService {
 
         if (type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
                 || type == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
-            if (containsStickerHint(source) || eventContainsStickerHint(event)) {
+            if (containsStickerHint(source) || eventContainsStickerHint(event)
+                    || rootContainsStickerHint()) {
                 stickerPickerActive = true;
                 Log.d(TAG, "Sticker picker detected");
             }
@@ -56,7 +60,7 @@ public class WhatsAppStickerAccessibilityService extends AccessibilityService {
 
         if (source == null) return;
 
-        if (containsStickerHint(source)) {
+        if (containsStickerHint(source) || rootContainsStickerHint()) {
             stickerPickerActive = true;
         }
 
@@ -79,8 +83,37 @@ public class WhatsAppStickerAccessibilityService extends AccessibilityService {
         // Fallback: if WhatsApp did not expose a sticker ID, capture the
         // selected thumbnail and register that image as a WhatsApp sticker.
         if (stickerPickerActive && looksLikeStickerThumbnail(source)) {
-            captureClickedSticker(source);
+            Rect clickedBounds = new Rect();
+            source.getBoundsInScreen(clickedBounds);
+            handler.postDelayed(() -> captureClickedSticker(clickedBounds), 120L);
         }
+    }
+
+    private boolean rootContainsStickerHint() {
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null) return false;
+
+        java.util.ArrayDeque<AccessibilityNodeInfo> queue = new java.util.ArrayDeque<>();
+        java.util.HashSet<AccessibilityNodeInfo> visited = new java.util.HashSet<>();
+        queue.add(root);
+
+        int scanned = 0;
+        while (!queue.isEmpty() && scanned++ < 500) {
+            AccessibilityNodeInfo node = queue.removeFirst();
+            if (node == null || !visited.add(node)) continue;
+
+            if (isStickerHint(node.getContentDescription())
+                    || isStickerHint(node.getText())
+                    || isStickerHint(node.getViewIdResourceName())) {
+                return true;
+            }
+
+            for (int i = 0; i < node.getChildCount(); i++) {
+                AccessibilityNodeInfo child = node.getChild(i);
+                if (child != null) queue.addLast(child);
+            }
+        }
+        return false;
     }
 
     private boolean eventContainsStickerHint(AccessibilityEvent event) {
@@ -180,7 +213,7 @@ public class WhatsAppStickerAccessibilityService extends AccessibilityService {
                     || !isStickerHint(description));
     }
 
-    private void captureClickedSticker(AccessibilityNodeInfo node) {
+    private void captureClickedSticker(Rect bounds) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
             Log.d(TAG, "Screenshot fallback requires Android 11+");
             return;
@@ -190,9 +223,7 @@ public class WhatsAppStickerAccessibilityService extends AccessibilityService {
         if (now - lastCaptureAt < 1200L) return;
         lastCaptureAt = now;
 
-        Rect bounds = new Rect();
-        node.getBoundsInScreen(bounds);
-        if (bounds.width() <= 0 || bounds.height() <= 0) return;
+        if (bounds == null || bounds.width() <= 0 || bounds.height() <= 0) return;
 
         Log.d(TAG, "Capturing possible WhatsApp sticker bounds=" + bounds);
 
