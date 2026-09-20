@@ -10,6 +10,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.Gravity;
+import android.util.DisplayMetrics;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -248,6 +249,14 @@ public class StickerKeyboardService extends InputMethodService {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(Color.rgb(245, 245, 245));
+
+        // El teclado de escritura busca ocupar aproximadamente un tercio de la pantalla.
+        if (!stickerMode) {
+            DisplayMetrics metrics = getResources().getDisplayMetrics();
+            int targetHeight = (int) (metrics.heightPixels * 0.33f);
+            root.setMinimumHeight(targetHeight);
+        }
+
         return root;
     }
 
