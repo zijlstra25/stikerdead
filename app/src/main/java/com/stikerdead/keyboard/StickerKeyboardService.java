@@ -161,14 +161,14 @@ public class StickerKeyboardService extends InputMethodService {
         toolbar.setGravity(Gravity.CENTER_VERTICAL | Gravity.RIGHT);
         toolbar.setPadding(6, 4, 6, 4);
 
-        // Controles superiores: autocorrector, idioma y stickers.
-        // Quedan separados visualmente del teclado por una línea.
-        TextView autocorrect = makeToolbarButton("A✓");
-        autocorrect.setContentDescription("Autocorrector");
-        autocorrect.setOnClickListener(v -> {
-            autocorrect.setText(autocorrect.getText().toString().equals("A✓") ? "A" : "A✓");
-        });
-        toolbar.addView(autocorrect, toolbarSquareParams());
+        // Barra superior: sugerencias predictivas a la izquierda y ES + stickers a la derecha.
+        TextView suggestions = makeToolbarButton("Hola     ¿Cómo?     Que");
+        suggestions.setContentDescription("Sugerencias predictivas");
+        suggestions.setTextSize(15);
+        suggestions.setGravity(Gravity.CENTER_VERTICAL | Gravity.LEFT);
+        toolbar.addView(suggestions, new LinearLayout.LayoutParams(
+                0, 46, 1f
+        ));
 
         TextView language = makeToolbarButton("ES");
         language.setContentDescription("Idioma español");
@@ -183,7 +183,7 @@ public class StickerKeyboardService extends InputMethodService {
                 ViewGroup.LayoutParams.MATCH_PARENT, 54
         ));
 
-        // Línea divisoria entre los controles superiores y las teclas.
+        // Línea divisoria entre las sugerencias, idioma/stickers y las teclas.
         View divider = new View(this);
         divider.setBackgroundColor(Color.rgb(190, 190, 190));
         root.addView(divider, new LinearLayout.LayoutParams(
