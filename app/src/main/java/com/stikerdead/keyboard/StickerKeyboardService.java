@@ -19,6 +19,7 @@ import android.inputmethodservice.InputMethodService;
 import android.view.inputmethod.EditorInfo;
 import java.util.Locale;
 import android.widget.GridLayout;
+import android.widget.HorizontalScrollView;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -84,19 +85,55 @@ public class StickerKeyboardService extends InputMethodService {
         header.setTextSize(16);
         header.setPadding(12, 8, 12, 8);
         root.addView(header, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, 56
+                ViewGroup.LayoutParams.MATCH_PARENT, 52
+        ));
+
+        // Categorías de stickers: desplazamiento horizontal para que entren todas.
+        HorizontalScrollView categoryScroll = new HorizontalScrollView(this);
+        categoryScroll.setHorizontalScrollBarEnabled(false);
+        categoryScroll.setPadding(6, 2, 6, 4);
+
+        LinearLayout categories = new LinearLayout(this);
+        categories.setOrientation(LinearLayout.HORIZONTAL);
+        categories.setGravity(Gravity.CENTER_VERTICAL);
+
+        addCategoryTextButton(categories, "＋", "Agregar sticker", v ->
+                Toast.makeText(this, "Próximamente: importar/crear sticker", Toast.LENGTH_SHORT).show());
+
+        addCategoryTextButton(categories, "Recientes", "Stickers recientes", v -> showAllStickers());
+        addCategoryTextButton(categories, "⭐ Favoritos", "Stickers favoritos", v ->
+                Toast.makeText(this, "Todavía no hay stickers favoritos", Toast.LENGTH_SHORT).show());
+
+        addCategoryIconButton(categories, R.drawable.whatsapp, "WhatsApp", "Stickers de WhatsApp");
+        addCategoryTextButton(categories, "Telegram", "Stickers de Telegram", v ->
+                Toast.makeText(this, "Stickers de Telegram", Toast.LENGTH_SHORT).show());
+        addCategoryIconButton(categories, R.drawable.instagram, "Instagram", "Stickers de Instagram");
+        addCategoryIconButton(categories, R.drawable.facebook, "Facebook", "Stickers de Facebook");
+        addCategoryIconButton(categories, R.drawable.discordia, "Discord", "Stickers de Discord");
+        addCategoryTextButton(categories, "Mis stickers", "Mis stickers", v -> showAllStickers());
+
+        categoryScroll.addView(categories, new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        ));
+        root.addView(categoryScroll, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 76
+        ));
+
+        View divider = new View(this);
+        divider.setBackgroundColor(Color.rgb(210, 210, 210));
+        root.addView(divider, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 1
         ));
 
         GridLayout grid = new GridLayout(this);
         grid.setColumnCount(4);
-        grid.setPadding(12, 12, 12, 12);
+        grid.setPadding(12, 8, 12, 8);
         root.addView(grid, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
         ));
 
-        for (StickerItem sticker : STICKERS) {
-            addStickerButton(grid, sticker);
-        }
+        showStickersInGrid(grid);
 
         TextView switchButton = makeActionButton("⌨  ESCRIBIR");
         switchButton.setOnClickListener(v -> switchToTypingMode());
@@ -105,6 +142,75 @@ public class StickerKeyboardService extends InputMethodService {
         ));
 
         return root;
+    }
+
+    private void showStickersInGrid(GridLayout grid) {
+        grid.removeAllViews();
+        for (StickerItem sticker : STICKERS) {
+            addStickerButton(grid, sticker);
+        }
+    }
+
+    private void showAllStickers() {
+        // Mantiene la colección actual y deja preparada la vista para futuras categorías.
+        setInputView(buildStickerView());
+    }
+
+    private void addCategoryTextButton(
+            LinearLayout parent,
+            String text,
+            String contentDescription,
+            View.OnClickListener listener
+    ) {
+        TextView button = makeKeyButton(text);
+        button.setTextSize(text.length() > 8 ? 12 : 13);
+        button.setContentDescription(contentDescription);
+        button.setGravity(Gravity.CENTER);
+        button.setPadding(12, 0, 12, 0);
+        button.setOnClickListener(listener);
+
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, 68
+        );
+        params.setMargins(3, 0, 3, 0);
+        parent.addView(button, params);
+    }
+
+    private void addCategoryIconButton(
+            LinearLayout parent,
+            int drawableRes,
+            String label,
+            String contentDescription
+    ) {
+        LinearLayout item = new LinearLayout(this);
+        item.setOrientation(LinearLayout.VERTICAL);
+        item.setGravity(Gravity.CENTER);
+        item.setPadding(4, 2, 4, 2);
+        item.setContentDescription(contentDescription);
+
+        ImageButton icon = new ImageButton(this);
+        icon.setImageResource(drawableRes);
+        icon.setScaleType(ImageButton.ScaleType.FIT_CENTER);
+        icon.setPadding(7, 5, 7, 2);
+        icon.setBackgroundColor(Color.WHITE);
+        icon.setContentDescription(contentDescription);
+        icon.setOnClickListener(v ->
+                Toast.makeText(this, label + ": stickers", Toast.LENGTH_SHORT).show());
+
+        item.addView(icon, new LinearLayout.LayoutParams(48, 48));
+
+        TextView text = new TextView(this);
+        text.setText(label);
+        text.setTextSize(10);
+        text.setTextColor(Color.rgb(40, 40, 40));
+        text.setGravity(Gravity.CENTER);
+        item.addView(text, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, 18
+        ));
+
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(64, 68);
+        params.setMargins(2, 0, 2, 0);
+        parent.addView(item, params);
     }
 
     private void addStickerButton(GridLayout grid, StickerItem sticker) {
