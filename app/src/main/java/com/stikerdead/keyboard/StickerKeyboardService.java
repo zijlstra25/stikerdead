@@ -168,7 +168,7 @@ public class StickerKeyboardService extends InputMethodService {
         LinearLayout root = createRoot();
 
         LinearLayout toolbar = new LinearLayout(this);
-        toolbar.setGravity(Gravity.CENTER_VERTICAL | Gravity.RIGHT);
+        toolbar.setGravity(Gravity.CENTER_VERTICAL);
         toolbar.setPadding(6, 4, 6, 4);
 
         // Barra superior: sugerencias predictivas a la izquierda y ES + stickers a la derecha.
@@ -178,8 +178,8 @@ public class StickerKeyboardService extends InputMethodService {
         updateSuggestionFromCursor(getCurrentInputConnection());
         suggestions.setContentDescription("Sugerencia predictiva");
         suggestions.setTextSize(15);
-        suggestions.setGravity(Gravity.CENTER_VERTICAL | Gravity.LEFT);
-        suggestions.setPadding(8, 0, 0, 0);
+        suggestions.setGravity(Gravity.CENTER);
+        suggestions.setPadding(8, 0, 8, 0);
         suggestions.setOnClickListener(v -> acceptSuggestion());
         toolbar.addView(suggestions, new LinearLayout.LayoutParams(
                 0, 46, 1f
