@@ -161,8 +161,17 @@ public class StickerKeyboardService extends InputMethodService {
         toolbar.setGravity(Gravity.CENTER_VERTICAL | Gravity.RIGHT);
         toolbar.setPadding(6, 4, 6, 4);
 
-        // Dos botones cuadrados arriba a la derecha: idioma y stickers.
+        // Controles superiores: autocorrector, idioma y stickers.
+        // Quedan separados visualmente del teclado por una línea.
+        TextView autocorrect = makeToolbarButton("A✓");
+        autocorrect.setContentDescription("Autocorrector");
+        autocorrect.setOnClickListener(v -> {
+            autocorrect.setText(autocorrect.getText().toString().equals("A✓") ? "A" : "A✓");
+        });
+        toolbar.addView(autocorrect, toolbarSquareParams());
+
         TextView language = makeToolbarButton("ES");
+        language.setContentDescription("Idioma español");
         toolbar.addView(language, toolbarSquareParams());
 
         TextView stickers = makeToolbarButton("🖼");
@@ -172,6 +181,13 @@ public class StickerKeyboardService extends InputMethodService {
 
         root.addView(toolbar, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 54
+        ));
+
+        // Línea divisoria entre los controles superiores y las teclas.
+        View divider = new View(this);
+        divider.setBackgroundColor(Color.rgb(190, 190, 190));
+        root.addView(divider, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 2
         ));
 
         LinearLayout keys = new LinearLayout(this);
