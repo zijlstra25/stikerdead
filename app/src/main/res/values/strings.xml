@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">StikerDead</string>
+    <string name="keyboard_name">StikerDead Keyboard</string>
+    <string name="enable_keyboard">Activar teclado StikerDead</string>
+    <string name="keyboard_description">Teclado Android con acceso rápido a stickers.</string>
+</resources>
