@@ -18,6 +18,7 @@ import android.view.inputmethod.InputConnection;
 import android.inputmethodservice.InputMethodService;
 import android.view.inputmethod.EditorInfo;
 import android.widget.GridLayout;
+import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -174,20 +175,12 @@ public class StickerKeyboardService extends InputMethodService {
         language.setContentDescription("Idioma español");
         toolbar.addView(language, toolbarSquareParams());
 
-        TextView stickers = makeToolbarButton("");
+        ImageButton stickers = new ImageButton(this);
         stickers.setContentDescription("Stickers");
-        stickers.setGravity(Gravity.CENTER);
-        android.graphics.drawable.Drawable stickerIcon = androidx.core.content.ContextCompat.getDrawable(
-                this,
-                R.drawable.sticker_icon
-        );
-        if (stickerIcon != null) {
-            int iconWidth = (int) (50 * getResources().getDisplayMetrics().density);
-            int iconHeight = (int) (42 * getResources().getDisplayMetrics().density);
-            stickerIcon.setBounds(0, 0, iconWidth, iconHeight);
-            stickers.setCompoundDrawables(stickerIcon, null, null, null);
-            stickers.setCompoundDrawablePadding(0);
-        }
+        stickers.setImageResource(R.drawable.sticker_icon);
+        stickers.setScaleType(ImageButton.ScaleType.CENTER_INSIDE);
+        stickers.setPadding(2, 2, 2, 2);
+        stickers.setBackgroundColor(Color.WHITE);
         stickers.setOnClickListener(v -> switchToStickerMode());
         toolbar.addView(stickers, toolbarSquareParams());
 
