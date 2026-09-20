@@ -17,6 +17,7 @@ import android.view.ViewGroup;
 import android.view.inputmethod.InputConnection;
 import android.inputmethodservice.InputMethodService;
 import android.view.inputmethod.EditorInfo;
+import java.util.Locale;
 import android.widget.GridLayout;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
@@ -45,6 +46,7 @@ public class StickerKeyboardService extends InputMethodService {
     private EditorInfo currentEditorInfo;
     private boolean stickerMode = true;
     private boolean shiftEnabled = true;
+    private TextView suggestionView;
 
     @Override
     public void onStartInput(EditorInfo attribute, boolean restarting) {
@@ -163,7 +165,9 @@ public class StickerKeyboardService extends InputMethodService {
         toolbar.setPadding(6, 4, 6, 4);
 
         // Barra superior: sugerencias predictivas a la izquierda y ES + stickers a la derecha.
-        TextView suggestions = makeToolbarButton("Hola");
+        TextView suggestions = makeToolbarButton("");
+        suggestionView = suggestions;
+        updateSuggestion("");
         suggestions.setContentDescription("Sugerencia predictiva");
         suggestions.setTextSize(15);
         suggestions.setGravity(Gravity.CENTER_VERTICAL | Gravity.LEFT);
@@ -349,7 +353,38 @@ public class StickerKeyboardService extends InputMethodService {
         InputConnection ic = getCurrentInputConnection();
         if (ic != null) {
             ic.commitText(text, 1);
+            updateSuggestionFromCursor(ic);
         }
+    }
+
+    private void updateSuggestionFromCursor(InputConnection ic) {
+        CharSequence before = ic.getTextBeforeCursor(64, 0);
+        String text = before == null ? "" : before.toString();
+        int end = text.length();
+        int start = end;
+        while (start > 0 && !Character.isWhitespace(text.charAt(start - 1))) {
+            start--;
+        }
+        String current = text.substring(start, end);
+        updateSuggestion(current);
+    }
+
+    private void updateSuggestion(String current) {
+        if (suggestionView == null) return;
+        String prefix = current.toLowerCase(Locale.ROOT);
+        String suggestion;
+        if (prefix.isEmpty()) {
+            suggestion = "Hola";
+        } else if (prefix.length() == 1) {
+            suggestion = prefix.equals("h") ? "hola" : prefix;
+        } else if (prefix.startsWith("ho")) {
+            suggestion = "hola";
+        } else if (prefix.startsWith("hol")) {
+            suggestion = "hola";
+        } else {
+            suggestion = prefix;
+        }
+        suggestionView.setText(suggestion);
     }
 
     private void deleteText() {
