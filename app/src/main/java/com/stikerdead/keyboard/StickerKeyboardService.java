@@ -63,6 +63,7 @@ public class StickerKeyboardService extends InputMethodService {
     private PredictionEngine predictionEngine;
     private final List<TextView> letterKeys = new java.util.ArrayList<>();
     private final Set<String> favoriteStickerIds = new HashSet<>();
+    private final List<String> recentStickerIds = new ArrayList<>();
     private String selectedStickerCategory = "recent";
     private final List<ImportedSticker> importedStickers = new ArrayList<>();
     private static final int PICK_STICKERS_REQUEST = 4001;
@@ -96,6 +97,7 @@ public class StickerKeyboardService extends InputMethodService {
         stickerMode = true;
         loadFavorites();
         loadImportedStickers();
+        loadRecentStickers();
 
         LinearLayout root = createRoot();
 
@@ -154,26 +156,59 @@ public class StickerKeyboardService extends InputMethodService {
 
     private void showStickersInGrid(GridLayout grid) {
         grid.removeAllViews();
+
+        if ("recent".equals(selectedStickerCategory)) {
+            for (String recentId : recentStickerIds) {
+                StickerItem builtIn = findBuiltInSticker(recentId);
+                if (builtIn != null) {
+                    addStickerButton(grid, builtIn);
+                    continue;
+                }
+                ImportedSticker imported = findImportedSticker(recentId);
+                if (imported != null) addImportedStickerButton(grid, imported);
+            }
+            return;
+        }
+
         for (StickerItem sticker : STICKERS) {
-            // Los stickers incluidos de prueba pertenecen a Recientes.
-            // No se muestran dentro de las categorías de apps.
-            if ("recent".equals(selectedStickerCategory)) {
-                addStickerButton(grid, sticker);
-            } else if ("favorites".equals(selectedStickerCategory)
+            if ("favorites".equals(selectedStickerCategory)
                     && favoriteStickerIds.contains(sticker.id())) {
                 addStickerButton(grid, sticker);
             }
         }
+
         for (ImportedSticker sticker : importedStickers) {
             if ("favorites".equals(selectedStickerCategory)) {
                 if (!favoriteStickerIds.contains(sticker.id)) continue;
-            } else if ("recent".equals(selectedStickerCategory)) {
-                // mostrar
             } else if (!selectedStickerCategory.equals(sticker.category)) {
                 continue;
             }
             addImportedStickerButton(grid, sticker);
         }
+    }
+
+    private StickerItem findBuiltInSticker(String id) {
+        for (StickerItem sticker : STICKERS) {
+            if (sticker.id().equals(id)) return sticker;
+        }
+        return null;
+    }
+
+    private ImportedSticker findImportedSticker(String id) {
+        for (ImportedSticker sticker : importedStickers) {
+            if (sticker.id.equals(id)) return sticker;
+        }
+        return null;
+    }
+
+    private void loadRecentStickers() {
+        recentStickerIds.clear();
+        recentStickerIds.addAll(RecentStickerManager.getRecentIds(this));
+    }
+
+    private void markStickerUsed(String id) {
+        RecentStickerManager.markUsed(this, id);
+        loadRecentStickers();
     }
 
     private void addImportedStickerButton(GridLayout grid, ImportedSticker sticker) {
@@ -295,6 +330,8 @@ public class StickerKeyboardService extends InputMethodService {
                 Toast.makeText(this,
                         direct ? "WhatsApp no aceptó el sticker" : "La app rechazó la imagen",
                         Toast.LENGTH_SHORT).show();
+            } else if (direct) {
+                markStickerUsed(sticker.id);
             }
         } catch (Exception e) {
             Toast.makeText(this, "Error preparando sticker: " + e.getMessage(), Toast.LENGTH_SHORT).show();
@@ -1015,6 +1052,8 @@ public class StickerKeyboardService extends InputMethodService {
                                 : "La app rechazó la imagen",
                         Toast.LENGTH_SHORT
                 ).show();
+            } else if (directStickerMode) {
+                markStickerUsed(sticker.id());
             }
         } catch (Exception e) {
             Toast.makeText(
