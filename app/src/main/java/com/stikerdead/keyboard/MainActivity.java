@@ -56,6 +56,27 @@ public class MainActivity extends Activity {
                 ViewGroup.LayoutParams.WRAP_CONTENT
         ));
 
+        Button accessibility = new Button(this);
+        accessibility.setText("Activar detección de stickers de WhatsApp");
+        accessibility.setOnClickListener(v ->
+                startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        );
+        root.addView(accessibility, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        ));
+
+        TextView accessibilityInfo = new TextView(this);
+        accessibilityInfo.setText(
+                "\nPara que StickerDead pueda detectar un sticker elegido desde el selector nativo de WhatsApp, " +
+                "activá el servicio de accesibilidad de StickerDead."
+        );
+        accessibilityInfo.setTextSize(14);
+        root.addView(accessibilityInfo, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        ));
+
         setContentView(root);
 
         Intent action = getIntent();
