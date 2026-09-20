@@ -1,6 +1,7 @@
 package com.stikerdead.keyboard;
 
 import android.content.ClipDescription;
+import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -22,6 +23,7 @@ import android.widget.FrameLayout;
 import android.widget.GridLayout;
 import android.widget.HorizontalScrollView;
 import android.widget.ImageButton;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -32,7 +34,9 @@ import androidx.core.view.inputmethod.InputContentInfoCompat;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -57,6 +61,9 @@ public class StickerKeyboardService extends InputMethodService {
     private final List<TextView> letterKeys = new java.util.ArrayList<>();
     private final Set<String> favoriteStickerIds = new HashSet<>();
     private String selectedStickerCategory = "recent";
+    private final List<ImportedSticker> importedStickers = new ArrayList<>();
+    private static final int PICK_STICKERS_REQUEST = 4001;
+    private String importCategory = "personal";
 
     @Override
     public void onStartInput(EditorInfo attribute, boolean restarting) {
@@ -82,6 +89,7 @@ public class StickerKeyboardService extends InputMethodService {
     private View buildStickerView() {
         stickerMode = true;
         loadFavorites();
+        loadImportedStickers();
 
         LinearLayout root = createRoot();
 
@@ -144,6 +152,75 @@ public class StickerKeyboardService extends InputMethodService {
             if ("favorites".equals(selectedStickerCategory) && !favoriteStickerIds.contains(sticker.id())) continue;
             addStickerButton(grid, sticker);
         }
+    }
+
+    private void showImportCategoryDialog() {
+        final String[] names = {"WhatsApp", "Instagram", "Facebook", "Discord", "Mis stickers"};
+        final String[] values = {"whatsapp", "instagram", "facebook", "discord", "personal"};
+        new android.app.AlertDialog.Builder(this).setTitle("Importar stickers").setItems(names, (d, which) -> {
+            importCategory = values[which];
+            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            intent.setType("image/*");
+            intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+            startActivityForResult(intent, PICK_STICKERS_REQUEST);
+        }).setNegativeButton("Cancelar", null).show();
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != PICK_STICKERS_REQUEST || resultCode != RESULT_OK || data == null) return;
+        ArrayList<Uri> uris = new ArrayList<>();
+        if (data.getClipData() != null) {
+            for (int i = 0; i < data.getClipData().getItemCount(); i++) uris.add(data.getClipData().getItemAt(i).getUri());
+        } else if (data.getData() != null) uris.add(data.getData());
+        int count = 0;
+        for (Uri uri : uris) if (importSticker(uri)) count++;
+        if (count > 0) { selectedStickerCategory = importCategory; setInputView(buildStickerView());
+            Toast.makeText(this, count + " sticker importado" + (count == 1 ? "" : "s"), Toast.LENGTH_SHORT).show(); }
+    }
+
+    private boolean importSticker(Uri uri) {
+        String mime = getContentResolver().getType(uri);
+        if (mime == null || !mime.startsWith("image/")) return false;
+        String id = "imported_" + System.currentTimeMillis() + "_" + importedStickers.size();
+        String ext = "image/webp".equals(mime) ? ".webp" : "image/png".equals(mime) ? ".png" : ".jpg";
+        File dir = new File(getFilesDir(), "stickers");
+        if (!dir.exists() && !dir.mkdirs()) return false;
+        File target = new File(dir, id + ext);
+        try (InputStream in = getContentResolver().openInputStream(uri); FileOutputStream out = new FileOutputStream(target)) {
+            if (in == null) return false;
+            byte[] buffer = new byte[8192]; int n;
+            while ((n = in.read(buffer)) != -1) out.write(buffer, 0, n);
+        } catch (Exception e) { return false; }
+        importedStickers.add(new ImportedSticker(id, target.getAbsolutePath(), importCategory, mime));
+        saveImportedStickers();
+        return true;
+    }
+
+    private void loadImportedStickers() {
+        importedStickers.clear();
+        String saved = getSharedPreferences("stickers", MODE_PRIVATE).getString("imported", "");
+        if (saved == null || saved.isEmpty()) return;
+        for (String record : saved.split("\\n")) {
+            String[] p = record.split("\\|", -1);
+            if (p.length == 4 && new File(p[1]).exists()) importedStickers.add(new ImportedSticker(p[0], p[1], p[2], p[3]));
+        }
+    }
+
+    private void saveImportedStickers() {
+        StringBuilder saved = new StringBuilder();
+        for (ImportedSticker s : importedStickers) {
+            if (saved.length() > 0) saved.append("\\n");
+            saved.append(s.id).append("|").append(s.path).append("|").append(s.category).append("|").append(s.mimeType);
+        }
+        getSharedPreferences("stickers", MODE_PRIVATE).edit().putString("imported", saved.toString()).apply();
+    }
+
+    private static class ImportedSticker {
+        final String id, path, category, mimeType;
+        ImportedSticker(String id, String path, String category, String mimeType) { this.id=id; this.path=path; this.category=category; this.mimeType=mimeType; }
     }
 
     private void showStickerCategory(String category) {
