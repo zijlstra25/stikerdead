@@ -164,9 +164,23 @@ public class StickerKeyboardService extends InputMethodService {
 
         // Barra superior: sugerencias predictivas a la izquierda y ES + stickers a la derecha.
         TextView suggestions = makeToolbarButton("Hola");
-        suggestions.setContentDescription("Sugerencias predictivas");
+        suggestions.setContentDescription("Sugerencia predictiva");
         suggestions.setTextSize(15);
         suggestions.setGravity(Gravity.CENTER_VERTICAL | Gravity.LEFT);
+        suggestions.setOnClickListener(v -> {
+            InputConnection ic = getCurrentInputConnection();
+            if (ic != null) {
+                CharSequence before = ic.getTextBeforeCursor(64, 0);
+                String text = before == null ? "" : before.toString();
+                int end = text.length();
+                int start = end;
+                while (start > 0 && !Character.isWhitespace(text.charAt(start - 1))) {
+                    start--;
+                }
+                ic.deleteSurroundingText(end - start, 0);
+                ic.commitText(suggestions.getText().toString() + " ", 1);
+            }
+        });
         toolbar.addView(suggestions, new LinearLayout.LayoutParams(
                 0, 46, 1f
         ));
