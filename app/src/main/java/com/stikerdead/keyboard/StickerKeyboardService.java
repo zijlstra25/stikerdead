@@ -62,7 +62,7 @@ public class StickerKeyboardService extends InputMethodService {
 
     @Override
     public View onCreateInputView() {
-        return buildStickerView();
+        return buildTypingView();
     }
 
     private View buildStickerView() {
@@ -178,8 +178,8 @@ public class StickerKeyboardService extends InputMethodService {
         ImageButton stickers = new ImageButton(this);
         stickers.setContentDescription("Stickers");
         stickers.setImageResource(R.drawable.sticker_icon);
-        stickers.setScaleType(ImageButton.ScaleType.CENTER_INSIDE);
-        stickers.setPadding(2, 2, 2, 2);
+        stickers.setScaleType(ImageButton.ScaleType.FIT_CENTER);
+        stickers.setPadding(0, 0, 0, 0);
         stickers.setBackgroundColor(Color.WHITE);
         stickers.setOnClickListener(v -> switchToStickerMode());
         toolbar.addView(stickers, toolbarSquareParams());
