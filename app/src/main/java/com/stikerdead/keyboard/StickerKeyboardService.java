@@ -9,7 +9,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.inputmethod.InputConnection;
 import android.view.inputmethod.InputContentInfo;
-import android.view.inputmethod.InputMethodService;
+import android.inputmethodservice.InputMethodService;
 import android.widget.GridLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
