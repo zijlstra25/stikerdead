@@ -227,13 +227,16 @@ public class StickerKeyboardService extends InputMethodService {
         TextView shift = makeKeyButton("⇧");
         shift.setOnClickListener(v -> {
             if (symbolsMode) return;
-            if (shiftEnabled) {
+            if (capsLock) {
+                capsLock = false;
+                shiftEnabled = false;
+            } else if (shiftEnabled) {
                 capsLock = true;
                 shiftEnabled = true;
             } else {
                 shiftEnabled = true;
             }
-            shift.setText(capsLock ? "⇧" : "⇧");
+            shift.setText("⇧");
         });
         row3.addView(shift, keyParams(1.15f));
 
@@ -286,7 +289,7 @@ public class StickerKeyboardService extends InputMethodService {
     private void addKeyRow(LinearLayout parent, String[] letters) {
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.CENTER);
-        row.setPadding(1, 0, 1, 0);
+        row.setPadding(letters.length == 10 ? 12 : 1, 0, letters.length == 10 ? 12 : 1, 0);
 
         for (String letter : letters) {
             TextView key = makeKeyButton(letter);
