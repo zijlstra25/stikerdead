@@ -307,7 +307,18 @@ public class StickerKeyboardService extends InputMethodService {
         ));
     }
 
-    private void updateLetterKeyLabels() {\n        for (TextView key : letterKeys) {\n            String letter = key.getText().toString();\n            if (letter.length() == 1 && Character.isLetter(letter.charAt(0))) {\n                key.setText((shiftEnabled || capsLock) ? letter.toUpperCase(Locale.ROOT) : letter.toLowerCase(Locale.ROOT));\n            }\n        }\n    }\n\n    private void typeLetter(String letter) {
+    private void updateLetterKeyLabels() {
+        for (TextView key : letterKeys) {
+            String letter = key.getText().toString();
+            if (letter.length() == 1 && Character.isLetter(letter.charAt(0))) {
+                key.setText((shiftEnabled || capsLock)
+                        ? letter.toUpperCase(Locale.ROOT)
+                        : letter.toLowerCase(Locale.ROOT));
+            }
+        }
+    }
+
+    private void typeLetter(String letter) {
         if (symbolsMode) return;
         String value = (shiftEnabled || capsLock)
                 ? letter.toUpperCase(Locale.ROOT)
