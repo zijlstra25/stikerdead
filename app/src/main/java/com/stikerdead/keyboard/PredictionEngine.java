@@ -12,7 +12,8 @@ public class PredictionEngine {
 
     public PredictionEngine(Context context) {
         this.context = context.getApplicationContext();
-        seed();
+        load();
+        if (words.isEmpty()) seed();
     }
 
     public String suggest(String prefix, String previous) {
@@ -43,6 +44,7 @@ public class PredictionEngine {
             if (m == null) { m = new HashMap<>(); next.put(previous,m); }
             m.put(word, m.containsKey(word) ? m.get(word)+1 : 1);
         }
+        save();
     }
 
     private String bestNext(String previous) {
@@ -115,5 +117,33 @@ public class PredictionEngine {
 
     private String norm(String s) {
         return s == null ? "" : s.toLowerCase(Locale.ROOT).trim();
+    }
+    private void load() {
+        android.content.SharedPreferences p = context.getSharedPreferences("prediction_model", Context.MODE_PRIVATE);
+        String raw = p.getString("words", "");
+        java.util.StringTokenizer t = new java.util.StringTokenizer(raw, "|");
+        while (t.hasMoreTokens()) {
+            String item = t.nextToken(); int x = item.lastIndexOf("=");
+            if (x > 0) try { words.put(item.substring(0,x), Integer.parseInt(item.substring(x+1))); } catch (Exception ignored) {}
+        }
+        raw = p.getString("next", ""); t = new java.util.StringTokenizer(raw, "|");
+        while (t.hasMoreTokens()) {
+            String item=t.nextToken(); int x=item.indexOf(">"); int y=item.lastIndexOf("=");
+            if (x>0 && y>x) try {
+                Map<String,Integer> m=next.get(item.substring(0,x));
+                if(m==null){m=new HashMap<>();next.put(item.substring(0,x),m);}
+                m.put(item.substring(x+1,y),Integer.parseInt(item.substring(y+1)));
+            } catch(Exception ignored) {}
+        }
+    }
+
+    private void save() {
+        StringBuilder w=new StringBuilder();
+        for(Map.Entry<String,Integer> e:words.entrySet()) w.append(e.getKey()).append("=").append(e.getValue()).append("|");
+        StringBuilder n=new StringBuilder();
+        for(Map.Entry<String,Map<String,Integer>> e:next.entrySet())
+            for(Map.Entry<String,Integer> x:e.getValue().entrySet()) n.append(e.getKey()).append(">").append(x.getKey()).append("=").append(x.getValue()).append("|");
+        context.getSharedPreferences("prediction_model",Context.MODE_PRIVATE).edit()
+                .putString("words",w.toString()).putString("next",n.toString()).apply();
     }
 }
