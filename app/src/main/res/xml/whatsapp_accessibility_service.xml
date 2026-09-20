@@ -3,7 +3,7 @@
     android:accessibilityEventTypes="typeViewClicked|typeViewSelected|typeViewLongClicked|typeViewScrolled|typeWindowStateChanged|typeWindowContentChanged"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:notificationTimeout="100"
-    android:accessibilityFlags="flagDefault|flagReportViewIds"
+    android:accessibilityFlags="flagDefault|flagReportViewIds|flagIncludeNotImportantViews|flagRetrieveInteractiveWindows"
     android:canRetrieveWindowContent="true"
     android:canTakeScreenshot="true"
     android:description="@string/keyboard_description"
