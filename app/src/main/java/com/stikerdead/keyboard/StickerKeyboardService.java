@@ -285,58 +285,11 @@ public class StickerKeyboardService extends InputMethodService {
     }
 
     private void launchExternalActivity(Intent intent, int requestCode) {
-        Activity host = getHostActivity();
-        if (host == null) {
-            Toast.makeText(this, "No se pudo abrir esta función desde el teclado", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        host.startActivityForResult(intent, requestCode);
-    }
-
-    private Activity getHostActivity() {
-        try {
-            android.content.Context context = this;
-            while (context instanceof android.content.ContextWrapper) {
-                if (context instanceof Activity) return (Activity) context;
-                context = ((android.content.ContextWrapper) context).getBaseContext();
-            }
-        } catch (Exception ignored) {
-        }
-        return null;
-    }
-
-    private void handleStickerActivityResult(int requestCode, int resultCode, Intent data) {
-        if (requestCode == TAKE_STICKER_PHOTO_REQUEST) {
-            if (resultCode == RESULT_OK && pendingPhotoUri != null) {
-                if (importSticker(pendingPhotoUri)) {
-                    selectedStickerCategory = "personal";
-                    setInputView(buildStickerView());
-                    Toast.makeText(this, "Sticker agregado a Mis stickers", Toast.LENGTH_SHORT).show();
-                }
-            }
-            pendingPhotoUri = null;
-            return;
-        }
-
-        if (requestCode != PICK_STICKERS_REQUEST || resultCode != RESULT_OK || data == null) return;
-
-        ArrayList<Uri> uris = new ArrayList<>();
-        if (data.getClipData() != null) {
-            for (int i = 0; i < data.getClipData().getItemCount(); i++) {
-                uris.add(data.getClipData().getItemAt(i).getUri());
-            }
-        } else if (data.getData() != null) {
-            uris.add(data.getData());
-        }
-
-        int count = 0;
-        for (Uri uri : uris) if (importSticker(uri)) count++;
-
-        if (count > 0) {
-            selectedStickerCategory = "personal";
-            setInputView(buildStickerView());
-            Toast.makeText(this, count + " sticker importado" + (count == 1 ? "" : "s") + " a Mis stickers", Toast.LENGTH_SHORT).show();
-        }
+        Intent proxy = new Intent(this, MainActivity.class);
+        proxy.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        proxy.putExtra("sticker_action", requestCode == TAKE_STICKER_PHOTO_REQUEST ? "camera" : "picker");
+        proxy.putExtra("sticker_category", importCategory);
+        startActivity(proxy);
     }
 
     private boolean importSticker(Uri uri) {
