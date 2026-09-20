@@ -167,6 +167,7 @@ public class StickerKeyboardService extends InputMethodService {
         suggestions.setContentDescription("Sugerencia predictiva");
         suggestions.setTextSize(15);
         suggestions.setGravity(Gravity.CENTER_VERTICAL | Gravity.LEFT);
+        suggestions.setPadding(8, 0, 0, 0);
         suggestions.setOnClickListener(v -> {
             InputConnection ic = getCurrentInputConnection();
             if (ic != null) {
@@ -177,7 +178,11 @@ public class StickerKeyboardService extends InputMethodService {
                 while (start > 0 && !Character.isWhitespace(text.charAt(start - 1))) {
                     start--;
                 }
-                ic.deleteSurroundingText(end - start, 0);
+                int wordLength = end - start;
+                if (wordLength > 0) {
+                    ic.setSelection(end, end);
+                    ic.deleteSurroundingText(wordLength, 0);
+                }
                 ic.commitText(suggestions.getText().toString() + " ", 1);
             }
         });
