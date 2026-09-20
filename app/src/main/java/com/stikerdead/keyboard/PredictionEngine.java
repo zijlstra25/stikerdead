@@ -96,7 +96,7 @@ public class PredictionEngine {
         String[] ws={
             "a","al","algo","antes","aquí","así","bien","cada","casa","como","cómo","con",
             "cuando","cuándo","de","del","desde","donde","dónde","el","ella","ellos","en","es",
-            "esa","ese","eso","esta","está","este","esto","favor","fue","gracias","hola","hace",
+            "esa","ese","eso","esta","está","este","esto","favor","fue","gracias","hace",
             "hacia","hay","he","hoy","la","las","le","lo","los","más","me","mi","mismo","muy",
             "necesito","no","nos","nosotros","para","pero","por","porque","que","qué","quiero",
             "se","si","sí","sin","sobre","soy","su","también","te","tengo","ti","todo","todos",
