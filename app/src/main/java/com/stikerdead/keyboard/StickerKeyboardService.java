@@ -230,7 +230,7 @@ public class StickerKeyboardService extends InputMethodService {
         bottom.addView(backspace, keyParams(1f));
 
         keys.addView(bottom, new LinearLayout.LayoutParams(
-                0, 1f
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
         ));
 
         return root;
@@ -257,7 +257,7 @@ public class StickerKeyboardService extends InputMethodService {
         }
 
         parent.addView(row, new LinearLayout.LayoutParams(
-                0, 1f
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
         ));
     }
 
