@@ -2,6 +2,7 @@ package com.stikerdead.keyboard;
 
 import android.content.ClipDescription;
 import android.content.Intent;
+import android.app.Activity;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -66,6 +67,7 @@ public class StickerKeyboardService extends InputMethodService {
     private final List<ImportedSticker> importedStickers = new ArrayList<>();
     private static final int PICK_STICKERS_REQUEST = 4001;
     private static final int TAKE_STICKER_PHOTO_REQUEST = 4002;
+    private static final int RESULT_OK = Activity.RESULT_OK;
     private String importCategory = "personal";
     private Uri pendingPhotoUri;
 
@@ -255,7 +257,7 @@ public class StickerKeyboardService extends InputMethodService {
                         intent.addCategory(Intent.CATEGORY_OPENABLE);
                         intent.setType("image/*");
                         intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
-                        startActivityForResult(intent, PICK_STICKERS_REQUEST);
+                        launchExternalActivity(intent, PICK_STICKERS_REQUEST);
                     }
                 })
                 .setNegativeButton("Cancelar", null)
@@ -276,16 +278,34 @@ public class StickerKeyboardService extends InputMethodService {
             Intent intent = new Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE);
             intent.putExtra(android.provider.MediaStore.EXTRA_OUTPUT, pendingPhotoUri);
             intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            startActivityForResult(intent, TAKE_STICKER_PHOTO_REQUEST);
+            launchExternalActivity(intent, TAKE_STICKER_PHOTO_REQUEST);
         } catch (Exception e) {
             Toast.makeText(this, "No se pudo abrir la cámara: " + e.getMessage(), Toast.LENGTH_SHORT).show();
         }
     }
 
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
+    private void launchExternalActivity(Intent intent, int requestCode) {
+        Activity host = getHostActivity();
+        if (host == null) {
+            Toast.makeText(this, "No se pudo abrir esta función desde el teclado", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        host.startActivityForResult(intent, requestCode);
+    }
 
+    private Activity getHostActivity() {
+        try {
+            android.content.Context context = this;
+            while (context instanceof android.content.ContextWrapper) {
+                if (context instanceof Activity) return (Activity) context;
+                context = ((android.content.ContextWrapper) context).getBaseContext();
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+
+    private void handleStickerActivityResult(int requestCode, int resultCode, Intent data) {
         if (requestCode == TAKE_STICKER_PHOTO_REQUEST) {
             if (resultCode == RESULT_OK && pendingPhotoUri != null) {
                 if (importSticker(pendingPhotoUri)) {
