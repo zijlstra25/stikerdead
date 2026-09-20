@@ -85,6 +85,7 @@ public class PredictionEngine {
     }
 
     private void add(String w) { words.put(w,1); }
+    private void boost(String w,int n) { words.put(w,n); }
     private void pair(String a,String b,int n) {
         Map<String,Integer> m=next.get(a);
         if(m==null){m=new HashMap<>();next.put(a,m);}
@@ -107,6 +108,11 @@ public class PredictionEngine {
             "comida","también","muchas","días","noches","luego","vemos","tal","haces"
         };
         for(String w:ws)add(w);
+        boost("que",120); boost("de",115); boost("la",110); boost("el",108);
+        boost("en",105); boost("un",100); boost("una",98); boost("para",95);
+        boost("por",92); boost("con",90); boost("como",88); boost("hola",80);
+        boost("quiero",75); boost("tengo",72); boost("está",70); boost("esta",68);
+        boost("puede",65); boost("puedo",63); boost("vamos",60);
         pair("hola","cómo",80); pair("hola","que",30); pair("cómo","estás",90);
         pair("qué","tal",70); pair("qué","quieres",35); pair("quiero","que",55);
         pair("quiero","una",40); pair("quiero","un",35); pair("para","que",70);
