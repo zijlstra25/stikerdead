@@ -177,7 +177,7 @@ public class StickerKeyboardService extends InputMethodService {
         TextView suggestions = makeToolbarButton("");
         suggestionView = suggestions;
         predictionEngine = new PredictionEngine(this);
-        updateSuggestionFromCursor(getCurrentInputConnection());
+        handler.postDelayed(() -> updateSuggestionFromCursor(getCurrentInputConnection()), 100);
         suggestions.setContentDescription("Sugerencia predictiva");
         suggestions.setTextSize(15);
         suggestions.setGravity(Gravity.CENTER);
@@ -238,7 +238,7 @@ public class StickerKeyboardService extends InputMethodService {
             } else {
                 shiftEnabled = true;
             }
-            shift.setText(capsLock || shiftEnabled ? "⇧" : "⇧");
+            updateShiftIcon(shift);
             updateLetterKeyLabels();
         });
         row3.addView(shift, keyParams(1.15f));
@@ -279,7 +279,7 @@ public class StickerKeyboardService extends InputMethodService {
         bottom.addView(period, keyParams(0.9f));
 
         TextView enter = makeKeyButton("↵");
-        enter.setTextSize(20);
+        enter.setTextSize(28);
         enter.setOnClickListener(v -> sendEnter());
         bottom.addView(enter, keyParams(1.15f));
 
@@ -305,6 +305,22 @@ public class StickerKeyboardService extends InputMethodService {
         parent.addView(row, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
         ));
+    }
+
+    private void updateShiftIcon(TextView shift) {
+        if (capsLock) {
+            shift.setText("⬆");
+            shift.setTextSize(24);
+            shift.setTypeface(null, android.graphics.Typeface.BOLD);
+        } else if (shiftEnabled) {
+            shift.setText("↑");
+            shift.setTextSize(24);
+            shift.setTypeface(null, android.graphics.Typeface.NORMAL);
+        } else {
+            shift.setText("⇧");
+            shift.setTextSize(22);
+            shift.setTypeface(null, android.graphics.Typeface.NORMAL);
+        }
     }
 
     private void updateLetterKeyLabels() {
