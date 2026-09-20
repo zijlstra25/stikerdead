@@ -391,6 +391,24 @@ public class StickerKeyboardService extends InputMethodService {
         return BitmapFactory.decodeFile(path, options);
     }
 
+    private void showImportCategoryDialog() {
+        final String[] categories = {"personal", "whatsapp", "instagram", "facebook", "discord"};
+        final String[] labels = {"Mis stickers", "WhatsApp", "Instagram", "Facebook", "Discord"};
+
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("¿Dónde guardar los stickers?")
+                .setSingleChoiceItems(labels, 0, (dialog, which) -> {
+                    Intent intent = new Intent(this, MainActivity.class);
+                    intent.putExtra("sticker_action", "add");
+                    intent.putExtra("sticker_category", categories[which]);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(intent);
+                    dialog.dismiss();
+                })
+                .setNegativeButton("Cancelar", null)
+                .show();
+    }
+
     private boolean importSticker(Uri uri) {
         String mime = getContentResolver().getType(uri);
         if (mime == null || !mime.startsWith("image/")) return false;
