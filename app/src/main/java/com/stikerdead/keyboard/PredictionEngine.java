@@ -21,7 +21,7 @@ public class PredictionEngine {
         previous = norm(previous);
         if (prefix.isEmpty()) {
             String n = bestNext(previous);
-            return n.isEmpty() ? "hola" : n;
+            return n;
         }
         String best = "";
         int score = -1;
